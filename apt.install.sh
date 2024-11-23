@@ -9,3 +9,5 @@
 #
 # @license   https://github.com/torrentpier/autoinstall/blob/main/LICENSE MIT License
 ##
+
+echo "Welcome to torrentpier automatic installation"
