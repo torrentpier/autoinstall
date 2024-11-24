@@ -4,7 +4,7 @@
 #
 # @copyright Copyright (c) 2024-present TorrentPier (https://torrentpier.com)
 # @copyright Copyright (c) 2024-present Solovev Sergei <inbox@seansolovev.ru>
-# 
+#
 # @link      https://github.com/torrentpier/autoinstall for the canonical source repository
 #
 # @license   https://github.com/torrentpier/autoinstall/blob/main/LICENSE MIT License
@@ -234,10 +234,10 @@ EOF
 
         # Creating a database
         sudo mysql -e "CREATE DATABASE $dbSql CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-    
+
         # Granting privileges to the user on the database
         sudo mysql -e "GRANT ALL PRIVILEGES ON $dbSql.* TO '$userSql'@'localhost';" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-    
+
         # Applying privilege changes
         sudo mysql -e "FLUSH PRIVILEGES;" 2>&1 | sudo tee -a "$logsInst" > /dev/null
 
@@ -285,7 +285,7 @@ EOF
     echo "User: admin"
     echo "Password: admin"
     echo "==================================="
-    echo "Link to torrentpier: http://$HOST:9090/phpmyadmin"
+    echo "Link to phpMyAdmin: http://$HOST:9090/phpmyadmin"
     echo "Database: $dbSql"
     echo "User to database: $userSql"
     echo "Password to database: $passSql"
