@@ -79,7 +79,7 @@ if $foundOs; then
         fi
     done
 
-    # Configuration file nginx for torrentpier
+    # Configuration file nginx for TorrentPier
     nginx_torrentpier="server {
     listen 80;
     server_name $HOST;
@@ -204,15 +204,15 @@ EOF
         curl -sSL https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer 2>&1 | sudo tee -a "$logsInst" > /dev/null
     fi
 
-    # Installation torrentpier
+    # Installation TorrentPier
     if [ ! -d "/var/www/torrentpier" ]; then
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        echo "torrentpier not installed. Installation in progress..." | tee -a "$logsInst"
+        echo "TorrentPier not installed. Installation in progress..." | tee -a "$logsInst"
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
         # Creating a temporary directory
         sudo mkdir -p /tmp/torrentpier 2>&1 | sudo tee -a "$logsInst" > /dev/null
 
-        # Downloading torrentpier
+        # Downloading TorrentPier
         curl -s https://api.github.com/repos/torrentpier/torrentpier/releases | jq -r 'map(select(.prerelease == false)) | .[0].zipball_url' | xargs -n 1 curl -L -o /tmp/torrentpier/torrentpier.zip 2>&1 | sudo tee -a "$logsInst" > /dev/null
         sudo unzip -o /tmp/torrentpier/torrentpier.zip -d /tmp/torrentpier 2>&1 | sudo tee -a "$logsInst" > /dev/null
         sudo mv /tmp/torrentpier/torrentpier-torrentpier-* /var/www/torrentpier 2>&1 | sudo tee -a "$logsInst" > /dev/null
@@ -248,7 +248,7 @@ EOF
         { (sudo crontab -l; echo "* * * * * php /var/www/torrentpier/cron.php") | sudo crontab -; } 2>&1 | sudo tee -a "$logsInst" > /dev/null
     else
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        echo "torrentpier is already installed on the system. The installation cannot continue." | tee -a "$logsInst"
+        echo "TorrentPier is already installed on the system. The installation cannot continue." | tee -a "$logsInst"
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
         read -rp "Press Enter to complete..."
         exit 1
@@ -264,7 +264,7 @@ EOF
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
         echo "nginx is not configured. The setup in progress..." | tee -a "$logsInst"
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        # We remove the default one and create the torrentpier config
+        # We remove the default one and create the TorrentPier config
         sudo rm /etc/nginx/sites-enabled/default 2>&1 | sudo tee -a "$logsInst" > /dev/null
         echo -e "$nginx_torrentpier" | sudo tee /etc/nginx/sites-available/01-torrentpier.conf 2>&1 | sudo tee -a "$logsInst" > /dev/null
         sudo ln -s /etc/nginx/sites-available/01-torrentpier.conf /etc/nginx/sites-enabled/ 2>&1 | sudo tee -a "$logsInst" > /dev/null
