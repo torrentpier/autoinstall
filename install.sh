@@ -15,7 +15,7 @@ clear
 # Arrays and variables used
 suppOs=("debian" "ubuntu")
 aptOs=("debian" "ubuntu")
-currOs=$(grep ^ID /etc/os-release | awk -F= '{print $2}')
+currOs=$(grep ^ID= /etc/os-release | awk -F= '{print $2}')
 logsInst="/var/log/torrentpier_install.log"
 
 # User verification
