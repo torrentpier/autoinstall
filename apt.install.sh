@@ -83,7 +83,7 @@ if $foundOs; then
         fi
     done
 
-    # Configuration file nginx for TorrentPier
+    # NGINX configuration file for TorrentPier
     nginx_torrentpier="server {
     listen 80;
     server_name $HOST;
@@ -110,7 +110,7 @@ if $foundOs; then
     }
 }"
 
-    # Configuration NGINX file for phpMyAdmin
+    # NGINX configuration file for phpMyAdmin
     nginx_phpmyadmin="server {
     listen 9090;
     server_name $HOST;
