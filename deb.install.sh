@@ -249,6 +249,11 @@ EOF
         # Exporting a database
         { sudo cat /var/www/torrentpier/install/sql/mysql.sql | sudo mysql -u "$userSql" -p"$passSql" "$dbSql"; } 2>&1 | sudo tee -a "$logsInst" > /dev/null
 
+        # We set the rights to directories and files
+        sudo chown -R www-data:www-data /var/www/torrentpier 2>&1 | sudo tee -a "$logsInst" > /dev/null
+        sudo find /var/www/torrentpier -type f -exec chmod 644 {} \; 2>&1 | sudo tee -a "$logsInst" > /dev/null
+        sudo find /var/www/torrentpier -type d -exec chmod 755 {} \; 2>&1 | sudo tee -a "$logsInst" > /dev/null
+
         # Setting the CRON task
         { (sudo crontab -l; echo "* * * * * php /var/www/torrentpier/cron.php") | sudo crontab -; } 2>&1 | sudo tee -a "$logsInst" > /dev/null
     else
@@ -258,11 +263,6 @@ EOF
         read -rp "Press Enter to complete..."
         exit 1
     fi
-
-    # We set the rights to directories and files
-    sudo chown -R www-data:www-data /var/www/torrentpier 2>&1 | sudo tee -a "$logsInst" > /dev/null
-    sudo find /var/www/torrentpier -type f -exec chmod 644 {} \; 2>&1 | sudo tee -a "$logsInst" > /dev/null
-    sudo find /var/www/torrentpier -type d -exec chmod 755 {} \; 2>&1 | sudo tee -a "$logsInst" > /dev/null
 
     # Setting up nginx
     if dpkg-query -W -f='${Status}' "nginx" 2>/dev/null | grep -q "install ok installed"; then
