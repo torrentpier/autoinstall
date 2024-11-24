@@ -110,7 +110,7 @@ if $foundOs; then
     }
 }"
 
-    # Configuration file nginx for phpmyadmin
+    # Configuration NGINX file for phpMyAdmin
     nginx_phpmyadmin="server {
     listen 9090;
     server_name $HOST;
@@ -139,7 +139,7 @@ if $foundOs; then
     }
 }"
 
-    # Packages for installation, torrentpier, phpmyadmin
+    # Packages for installation, TorrentPier, phpMyAdmin
     pkgsList=("php-fpm" "php-mbstring" "php-bcmath" "php-intl" "php-tidy" "php-xml" "php-xmlwriter" "php-zip" "php-gd" "php-json" "php-curl" "nginx" "mariadb-server" "pwgen" "jq" "curl" "zip" "unzip" "cron")
 
     # Updating tables and packages
