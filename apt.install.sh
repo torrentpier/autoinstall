@@ -4,7 +4,7 @@
 #
 # @copyright Copyright (c) 2024-present TorrentPier (https://torrentpier.com)
 # @copyright Copyright (c) 2024-present Solovev Sergei <inbox@seansolovev.ru>
-# 
+#
 # @link      https://github.com/torrentpier/autoinstall for the canonical source repository
 #
 # @license   https://github.com/torrentpier/autoinstall/blob/main/LICENSE MIT License
@@ -16,6 +16,10 @@ clear
 suppOs=("debian" "ubuntu")
 currOs=$(grep ^ID /etc/os-release | awk -F= '{print $2}')
 logsInst="/var/log/torrentpier_install.log"
+
+# TorrentPier auth
+torrentPierUser="admin"
+torrentPierPass="admin"
 
 # User verification
 if [ "$(whoami)" != "root" ]; then
@@ -79,7 +83,7 @@ if $foundOs; then
         fi
     done
 
-    # Configuration file nginx for torrentpier
+    # NGINX configuration file for TorrentPier
     nginx_torrentpier="server {
     listen 80;
     server_name $HOST;
@@ -106,7 +110,7 @@ if $foundOs; then
     }
 }"
 
-    # Configuration file nginx for phpmyadmin
+    # NGINX configuration file for phpMyAdmin
     nginx_phpmyadmin="server {
     listen 9090;
     server_name $HOST;
@@ -135,7 +139,7 @@ if $foundOs; then
     }
 }"
 
-    # Packages for installation, torrentpier, phpmyadmin
+    # Packages for installation, TorrentPier, phpMyAdmin
     pkgsList=("php-fpm" "php-mbstring" "php-bcmath" "php-intl" "php-tidy" "php-xml" "php-xmlwriter" "php-zip" "php-gd" "php-json" "php-curl" "nginx" "mariadb-server" "pwgen" "jq" "curl" "zip" "unzip" "cron")
 
     # Updating tables and packages
@@ -153,7 +157,7 @@ if $foundOs; then
         apt-get install -y sudo 2>&1 | sudo tee -a "$logsInst" > /dev/null
     fi
 
-    # Package installation сycle
+    # Package installation cycle
     for package in "${pkgsList[@]}"; do
         # Checking for packages and installing packages
         if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
@@ -172,7 +176,7 @@ if $foundOs; then
     # Installation phpMyAdmin
     if ! dpkg-query -W -f='${Status}' "phpmyadmin" 2>/dev/null | grep -q "install ok installed"; then
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        echo "phpmyadmin not installed. Installation in progress..." | tee -a "$logsInst"
+        echo "phpMyAdmin not installed. Installation in progress..." | tee -a "$logsInst"
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
 
         sudo debconf-set-selections <<EOF
@@ -190,7 +194,7 @@ EOF
         sudo systemctl restart nginx 2>&1 | sudo tee -a "$logsInst" > /dev/null
     else
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        echo "phpmyadmin is already installed on the system. The installation cannot continue." | tee -a "$logsInst"
+        echo "phpMyAdmin is already installed on the system. The installation cannot continue." | tee -a "$logsInst"
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
         read -rp "Press Enter to complete..."
         exit 1
@@ -204,15 +208,15 @@ EOF
         curl -sSL https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer 2>&1 | sudo tee -a "$logsInst" > /dev/null
     fi
 
-    # Installation torrentpier
+    # Installation TorrentPier
     if [ ! -d "/var/www/torrentpier" ]; then
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        echo "torrentpier not installed. Installation in progress..." | tee -a "$logsInst"
+        echo "TorrentPier not installed. Installation in progress..." | tee -a "$logsInst"
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
         # Creating a temporary directory
         sudo mkdir -p /tmp/torrentpier 2>&1 | sudo tee -a "$logsInst" > /dev/null
 
-        # Downloading torrentpier
+        # Downloading TorrentPier
         curl -s https://api.github.com/repos/torrentpier/torrentpier/releases | jq -r 'map(select(.prerelease == false)) | .[0].zipball_url' | xargs -n 1 curl -L -o /tmp/torrentpier/torrentpier.zip 2>&1 | sudo tee -a "$logsInst" > /dev/null
         sudo unzip -o /tmp/torrentpier/torrentpier.zip -d /tmp/torrentpier 2>&1 | sudo tee -a "$logsInst" > /dev/null
         sudo mv /tmp/torrentpier/torrentpier-torrentpier-* /var/www/torrentpier 2>&1 | sudo tee -a "$logsInst" > /dev/null
@@ -234,10 +238,10 @@ EOF
 
         # Creating a database
         sudo mysql -e "CREATE DATABASE $dbSql CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-    
+
         # Granting privileges to the user on the database
         sudo mysql -e "GRANT ALL PRIVILEGES ON $dbSql.* TO '$userSql'@'localhost';" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-    
+
         # Applying privilege changes
         sudo mysql -e "FLUSH PRIVILEGES;" 2>&1 | sudo tee -a "$logsInst" > /dev/null
 
@@ -248,7 +252,7 @@ EOF
         { (sudo crontab -l; echo "* * * * * php /var/www/torrentpier/cron.php") | sudo crontab -; } 2>&1 | sudo tee -a "$logsInst" > /dev/null
     else
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        echo "torrentpier is already installed on the system. The installation cannot continue." | tee -a "$logsInst"
+        echo "TorrentPier is already installed on the system. The installation cannot continue." | tee -a "$logsInst"
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
         read -rp "Press Enter to complete..."
         exit 1
@@ -262,9 +266,9 @@ EOF
     # Setting up nginx
     if dpkg-query -W -f='${Status}' "nginx" 2>/dev/null | grep -q "install ok installed"; then
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        echo "nginx is not configured. The setup in progress..." | tee -a "$logsInst"
+        echo "NGINX is not configured. The setup in progress..." | tee -a "$logsInst"
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        # We remove the default one and create the torrentpier config
+        # We remove the default one and create the TorrentPier config
         sudo rm /etc/nginx/sites-enabled/default 2>&1 | sudo tee -a "$logsInst" > /dev/null
         echo -e "$nginx_torrentpier" | sudo tee /etc/nginx/sites-available/01-torrentpier.conf 2>&1 | sudo tee -a "$logsInst" > /dev/null
         sudo ln -s /etc/nginx/sites-available/01-torrentpier.conf /etc/nginx/sites-enabled/ 2>&1 | sudo tee -a "$logsInst" > /dev/null
@@ -281,16 +285,16 @@ EOF
     fi
 
     echo "==================================="
-    echo "Link to torrentpier: http://$HOST/"
-    echo "User: admin"
-    echo "Password: admin"
+    echo "Link to your TorrentPier website: http://$HOST/"
+    echo "User: $torrentPierUser"
+    echo "Password: $torrentPierPass"
     echo "==================================="
-    echo "Link to torrentpier: http://$HOST:9090/phpmyadmin"
     echo "Database: $dbSql"
     echo "User to database: $userSql"
-    echo "Password to atabase: $passSql"
+    echo "Password to database: $passSql"
     echo "==================================="
-    echo "Password to phpmyadmin: $passPma"
+    echo "Link to phpMyAdmin: http://$HOST:9090/phpmyadmin"
+    echo "Password to phpMyAdmin: $passPma"
     echo "==================================="
 else
     echo "Your system is not supported." 2>&1 | tee -a "$logsInst"
