@@ -4,7 +4,7 @@
 #
 # @copyright Copyright (c) 2024-present TorrentPier (https://torrentpier.com)
 # @copyright Copyright (c) 2024-present Solovev Sergei <inbox@seansolovev.ru>
-# 
+#
 # @link      https://github.com/torrentpier/autoinstall for the canonical source repository
 #
 # @license   https://github.com/torrentpier/autoinstall/blob/main/LICENSE MIT License
@@ -55,7 +55,7 @@ if $foundOs; then
                 apt-get install -y sudo 2>&1 | sudo tee -a "$logsInst" > /dev/null
             fi
 
-            # Package installation сycle
+            # Package installation cycle
             for package in "${pkgsList[@]}"; do
                 # Checking for packages and installing packages
                 if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
