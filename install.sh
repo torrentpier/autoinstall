@@ -10,6 +10,8 @@
 # @license   https://github.com/torrentpier/autoinstall/blob/main/LICENSE MIT License
 ##
 
+clear
+
 # Arrays and variables used
 suppOs=("debian" "ubuntu")
 aptOs=("debian" "ubuntu")
@@ -35,19 +37,55 @@ done
 if $foundOs; then
     for os in "${aptOs[@]}"; do
         if [[ "$os" == "$currOs" ]]; then
-            apt-get -y update 2>&1 | tee -a "$logsInst"
-            apt-get -y dist-upgrade 2>&1 | tee -a "$logsInst"
+            # Required packages
+            pkgsList=("jq" "curl" "zip" "unzip")
 
-            apt-get install -y sudo jq curl zip unzip 2>&1 | tee -a "$logsInst"
+            # Updating tables and packages
+            echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            echo "Updating tables and packages" | tee -a "$logsInst"
+            echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            apt-get -y update 2>&1 | tee -a "$logsInst" > /dev/null
+            apt-get -y dist-upgrade 2>&1 | tee -a "$logsInst" > /dev/null
 
-            sudo mkdir -p /tmp/torrentpier 2>&1 | sudo tee -a "$logsInst"
-            sudo rm -rf /tmp/torrentpier/* 2>&1 | sudo tee -a "$logsInst"
+            # Check and installation sudo
+            if ! dpkg-query -W -f='${Status}' "sudo" 2>/dev/null | grep -q "install ok installed"; then
+                echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                echo "sudo not installed. Installation in progress..." | tee -a "$logsInst"
+                echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                apt-get install -y sudo 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            fi
 
-            curl -s https://api.github.com/repos/SeAnSolovev/torrentpier-autoinstall/releases | jq -r 'map(select(.prerelease == true)) | .[0].zipball_url' | xargs -n 1 curl -L -o /tmp/torrentpier/autoinstall.zip 2>&1 | sudo tee -a "$logsInst"
-            sudo unzip -o /tmp/torrentpier/autoinstall.zip -d /tmp/torrentpier 2>&1 | sudo tee -a "$logsInst"
-            sudo mv /tmp/torrentpier/*autoinstall-* /tmp/torrentpier/autoinstall 2>&1 | sudo tee -a "$logsInst"
+            # Package installation сycle
+            for package in "${pkgsList[@]}"; do
+                # Checking for packages and installing packages
+                if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
+                    echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                    echo "$package not installed. Installation in progress..." | tee -a "$logsInst"
+                    echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                    sudo apt-get install -y "$package" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                fi
+            done
 
-            sudo chmod +x /tmp/torrentpier/autoinstall/apt.install.sh 2>&1 | sudo tee -a "$logsInst"
+            # Preparing a temporary catalog
+            echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            echo "Preparing a temporary catalog" | tee -a "$logsInst"
+            echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            sudo mkdir -p /tmp/torrentpier 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            sudo rm -rf /tmp/torrentpier/* 2>&1 | sudo tee -a "$logsInst" > /dev/null
+
+            # Downloading the installation script
+            echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            echo "Downloading the installation script" | tee -a "$logsInst"
+            echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            curl -s https://api.github.com/repos/SeAnSolovev/torrentpier-autoinstall/releases | jq -r 'map(select(.prerelease == true)) | .[0].zipball_url' | xargs -n 1 curl -L -o /tmp/torrentpier/autoinstall.zip 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            sudo unzip -o /tmp/torrentpier/autoinstall.zip -d /tmp/torrentpier 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            sudo mv /tmp/torrentpier/*autoinstall-* /tmp/torrentpier/autoinstall 2>&1 | sudo tee -a "$logsInst" > /dev/null
+
+            # Starting the automatic installation
+            echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            echo "Starting the automatic installation" | tee -a "$logsInst"
+            echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            sudo chmod +x /tmp/torrentpier/autoinstall/apt.install.sh 2>&1 | sudo tee -a "$logsInst" > /dev/null
             sudo /tmp/torrentpier/autoinstall/apt.install.sh 2>&1 | sudo tee -a "$logsInst"
         fi
     done
