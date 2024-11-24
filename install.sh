@@ -77,7 +77,7 @@ if $foundOs; then
             echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
             echo "Downloading the installation script" | tee -a "$logsInst"
             echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-            curl -s https://api.github.com/repos/SeAnSolovev/torrentpier-autoinstall/releases | jq -r 'map(select(.prerelease == true)) | .[0].zipball_url' | xargs -n 1 curl -L -o /tmp/torrentpier/autoinstall.zip 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            curl -s https://api.github.com/repos/torrentpier/autoinstall/releases | jq -r 'map(select(.prerelease == true)) | .[0].zipball_url' | xargs -n 1 curl -L -o /tmp/torrentpier/autoinstall.zip 2>&1 | sudo tee -a "$logsInst" > /dev/null
             sudo unzip -o /tmp/torrentpier/autoinstall.zip -d /tmp/torrentpier 2>&1 | sudo tee -a "$logsInst" > /dev/null
             sudo mv /tmp/torrentpier/*autoinstall-* /tmp/torrentpier/autoinstall 2>&1 | sudo tee -a "$logsInst" > /dev/null
 
