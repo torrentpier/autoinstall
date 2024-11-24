@@ -262,7 +262,7 @@ EOF
     # Setting up nginx
     if dpkg-query -W -f='${Status}' "nginx" 2>/dev/null | grep -q "install ok installed"; then
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        echo "nginx is not configured. The setup in progress..." | tee -a "$logsInst"
+        echo "NGINX is not configured. The setup in progress..." | tee -a "$logsInst"
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
         # We remove the default one and create the TorrentPier config
         sudo rm /etc/nginx/sites-enabled/default 2>&1 | sudo tee -a "$logsInst" > /dev/null
@@ -281,7 +281,7 @@ EOF
     fi
 
     echo "==================================="
-    echo "Link to TorrentPier website: http://$HOST/"
+    echo "Link to your TorrentPier website: http://$HOST/"
     echo "User: admin"
     echo "Password: admin"
     echo "==================================="
