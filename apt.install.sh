@@ -17,6 +17,10 @@ suppOs=("debian" "ubuntu")
 currOs=$(grep ^ID /etc/os-release | awk -F= '{print $2}')
 logsInst="/var/log/torrentpier_install.log"
 
+# TorrentPier auth
+torrentPierUser="admin"
+torrentPierPass="admin"
+
 # User verification
 if [ "$(whoami)" != "root" ]; then
     echo "It needs to be run under the root user!" 2>&1 | tee -a "$logsInst"
@@ -153,7 +157,7 @@ if $foundOs; then
         apt-get install -y sudo 2>&1 | sudo tee -a "$logsInst" > /dev/null
     fi
 
-    # Package installation сycle
+    # Package installation cycle
     for package in "${pkgsList[@]}"; do
         # Checking for packages and installing packages
         if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
@@ -282,14 +286,14 @@ EOF
 
     echo "==================================="
     echo "Link to your TorrentPier website: http://$HOST/"
-    echo "User: admin"
-    echo "Password: admin"
+    echo "User: $torrentPierUser"
+    echo "Password: $torrentPierPass"
     echo "==================================="
-    echo "Link to phpMyAdmin: http://$HOST:9090/phpmyadmin"
     echo "Database: $dbSql"
     echo "User to database: $userSql"
     echo "Password to database: $passSql"
     echo "==================================="
+    echo "Link to phpMyAdmin: http://$HOST:9090/phpmyadmin"
     echo "Password to phpMyAdmin: $passPma"
     echo "==================================="
 else
