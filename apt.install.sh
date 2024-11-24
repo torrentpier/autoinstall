@@ -172,7 +172,7 @@ if $foundOs; then
     # Installation phpMyAdmin
     if ! dpkg-query -W -f='${Status}' "phpmyadmin" 2>/dev/null | grep -q "install ok installed"; then
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        echo "phpmyadmin not installed. Installation in progress..." | tee -a "$logsInst"
+        echo "phpMyAdmin not installed. Installation in progress..." | tee -a "$logsInst"
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
 
         sudo debconf-set-selections <<EOF
@@ -190,7 +190,7 @@ EOF
         sudo systemctl restart nginx 2>&1 | sudo tee -a "$logsInst" > /dev/null
     else
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        echo "phpmyadmin is already installed on the system. The installation cannot continue." | tee -a "$logsInst"
+        echo "phpMyAdmin is already installed on the system. The installation cannot continue." | tee -a "$logsInst"
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
         read -rp "Press Enter to complete..."
         exit 1
@@ -281,16 +281,16 @@ EOF
     fi
 
     echo "==================================="
-    echo "Link to torrentpier: http://$HOST/"
+    echo "Link to TorrentPier website: http://$HOST/"
     echo "User: admin"
     echo "Password: admin"
     echo "==================================="
     echo "Link to torrentpier: http://$HOST:9090/phpmyadmin"
     echo "Database: $dbSql"
     echo "User to database: $userSql"
-    echo "Password to atabase: $passSql"
+    echo "Password to database: $passSql"
     echo "==================================="
-    echo "Password to phpmyadmin: $passPma"
+    echo "Password to phpMyAdmin: $passPma"
     echo "==================================="
 else
     echo "Your system is not supported." 2>&1 | tee -a "$logsInst"
