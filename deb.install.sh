@@ -168,10 +168,10 @@ if $foundOs; then
         fi
     done
 
-    passPma=$(pwgen -1 8)
+    passPma="$(pwgen -1Bs 12)"
     dbSql="torrentpier_$(pwgen -1 8)"
     userSql="torrentpier_$(pwgen -1 8)"
-    passSql=$(pwgen -1 8)
+    passSql="$(pwgen -1Bs 12)"
 
     # Installation phpMyAdmin
     if ! dpkg-query -W -f='${Status}' "phpmyadmin" 2>/dev/null | grep -q "install ok installed"; then
