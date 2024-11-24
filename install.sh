@@ -86,7 +86,7 @@ if $foundOs; then
             echo "Starting the automatic installation" | tee -a "$logsInst"
             echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
             sudo chmod +x /tmp/torrentpier/autoinstall/apt.install.sh 2>&1 | sudo tee -a "$logsInst" > /dev/null
-            sudo /tmp/torrentpier/autoinstall/apt.install.sh 2>&1 | sudo tee -a "$logsInst"
+            sudo /tmp/torrentpier/autoinstall/apt.install.sh
         fi
     done
 else
