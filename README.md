@@ -29,11 +29,11 @@ chmod +x ./autoinstall/install.sh
 ```
 > [!NOTE]
 > install.sh always downloads the latest release.\
-> If you want to run it directly, use apt.install.sh for Debian and Ubuntu.
+> If you want to run it directly, use deb.install.sh for Debian and Ubuntu.
 
 **Running the installation script directly for debian and ubuntu**
 ```bash
-chmod +x ./autoinstall/install.sh && ./autoinstall/apt.install.sh
+chmod +x ./autoinstall/deb.install.sh && ./autoinstall/deb.install.sh
 ```
 ## Additional information:
 - **Web server:** NGINX + PHP-FPM
