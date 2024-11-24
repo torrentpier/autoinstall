@@ -85,8 +85,8 @@ if $foundOs; then
             echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
             echo "Starting the automatic installation" | tee -a "$logsInst"
             echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-            sudo chmod +x /tmp/torrentpier/autoinstall/apt.install.sh 2>&1 | sudo tee -a "$logsInst" > /dev/null
-            sudo /tmp/torrentpier/autoinstall/apt.install.sh
+            sudo chmod +x /tmp/torrentpier/autoinstall/deb.install.sh 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            sudo /tmp/torrentpier/autoinstall/deb.install.sh
         fi
     done
 else
