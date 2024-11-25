@@ -2,7 +2,7 @@
 **This shell script allows you to:**
 - Install TorrentPier in automatic mode;
 ## Supported systems:
-- **GNU/Linux:** Debian 11, 12
+- **GNU/Linux:** Debian 12
 - **GNU/Linux:** Ubuntu 22.04, 24.04
 > [!IMPORTANT]
 > The architecture and bit depth of x86_64 are required.
