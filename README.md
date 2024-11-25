@@ -41,6 +41,7 @@ chmod +x ./autoinstall/deb.install.sh && ./autoinstall/deb.install.sh
 - **NGINX config for TorrentPier:** /etc/nginx/sites-available/01-torrentpier.conf
 - **Installation logs directory:** /var/log/torrentpier_install.log
 - **Temporary directory:** /tmp/torrentpier
+- **The file with the data after installation:** /root/torrentpier.cfg
 ## Removing phpMyAdmin public access:
 **Removing the symbolic link**
 ```bash
