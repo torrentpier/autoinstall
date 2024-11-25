@@ -16,6 +16,7 @@ clear
 suppOs=("debian" "ubuntu")
 currOs=$(grep ^ID= /etc/os-release | awk -F= '{print $2}')
 logsInst="/var/log/torrentpier_install.log"
+saveFile="/root/torrentpier.cfg"
 
 # TorrentPier auth
 torrentPierUser="admin"
@@ -285,18 +286,18 @@ EOF
         exit 1
     fi
 
-    echo "==================================="
-    echo "Link to your TorrentPier website: http://$HOST/"
-    echo "User: $torrentPierUser"
-    echo "Password: $torrentPierPass"
-    echo "==================================="
-    echo "Database: $dbSql"
-    echo "User to database: $userSql"
-    echo "Password to database: $passSql"
-    echo "==================================="
-    echo "Link to phpMyAdmin: http://$HOST:9090/phpmyadmin"
-    echo "Password to phpMyAdmin: $passPma"
-    echo "==================================="
+    echo "===================================" | tee -a $saveFile
+    echo "Link to your TorrentPier website: http://$HOST/" | tee -a $saveFile
+    echo "User: $torrentPierUser" | tee -a $saveFile
+    echo "Password: $torrentPierPass" | tee -a $saveFile
+    echo "===================================" | tee -a $saveFile
+    echo "Database: $dbSql" | tee -a $saveFile
+    echo "User to database: $userSql" | tee -a $saveFile
+    echo "Password to database: $passSql" | tee -a $saveFile
+    echo "===================================" | tee -a $saveFile
+    echo "Link to phpMyAdmin: http://$HOST:9090/phpmyadmin" | tee -a $saveFile
+    echo "Password to phpMyAdmin: $passPma" | tee -a $saveFile
+    echo "===================================" | tee -a $saveFile
 else
     echo "Your system is not supported." 2>&1 | tee -a "$logsInst"
 fi
