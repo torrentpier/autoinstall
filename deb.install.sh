@@ -255,7 +255,7 @@ EOF
         sudo find /var/www/torrentpier -type d -exec chmod 755 {} \; 2>&1 | sudo tee -a "$logsInst" > /dev/null
 
         # Setting the CRON task
-        { (sudo crontab -l; echo "* * * * * php /var/www/torrentpier/cron.php") | sudo crontab -; } 2>&1 | sudo tee -a "$logsInst" > /dev/null
+        { (sudo crontab -l; echo "* * * * * sudo -u www-data php /var/www/torrentpier/cron.php") | sudo crontab -; } 2>&1 | sudo tee -a "$logsInst" > /dev/null
     else
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
         echo "TorrentPier is already installed on the system. The installation cannot continue." | tee -a "$logsInst"
