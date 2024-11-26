@@ -299,7 +299,7 @@ EOF
     echo "-> Database name: $dbSql" | sudo tee -a "$saveFile"
     echo "-> Username: $userSql" | sudo tee -a "$saveFile"
     echo "-> Password: $passSql" | sudo tee -a "$saveFile"
-    echo "===================================" | sudo tee -a $saveFile
+    echo "===================================" | sudo tee -a "$saveFile"
     echo "DO NOT USE IT IF YOU DO NOT KNOW WHAT IT IS INTENDED FOR" | sudo tee -a "$saveFile" > /dev/null
     echo "phpMyAdmin credentials:" | sudo tee -a "$saveFile" > /dev/null
     echo "-> http://$HOST:9090/phpmyadmin" | sudo tee -a "$saveFile" > /dev/null
