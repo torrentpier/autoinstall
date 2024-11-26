@@ -306,6 +306,10 @@ EOF
     echo "-> Username: phpmyadmin" | sudo tee -a "$saveFile" > /dev/null
     echo "-> Password: $passPma" | sudo tee -a "$saveFile" > /dev/null
     echo "===================================" | sudo tee -a "$saveFile" > /dev/null
+    echo "" | sudo tee -a $saveFile
+    echo "We are sure that you will be able to create the best tracker available!" | sudo tee -a $saveFile
+    echo "Good luck!" | sudo tee -a $saveFile
+    echo "" | sudo tee -a $saveFile
 else
     echo "Your system is not supported." 2>&1 | tee -a "$logsInst"
 fi
