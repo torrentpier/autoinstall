@@ -286,25 +286,26 @@ EOF
         exit 1
     fi
 
-    echo "" | sudo tee -a $saveFile
-    echo "Woah! TorrentPier successfully installed!" | sudo tee -a $saveFile
-    echo "" | sudo tee -a $saveFile
+    echo "" | sudo tee -a "$saveFile"
+    echo "Woah! TorrentPier successfully installed!" | sudo tee -a "$saveFile"
+    echo "" | sudo tee -a "$saveFile"
+    echo "===================================" | sudo tee -a "$saveFile"
+    echo "TorrentPier credentials:" | sudo tee -a "$saveFile"
+    echo "-> http://$HOST/" | sudo tee -a "$saveFile"
+    echo "-> Username: $torrentPierUser" | sudo tee -a "$saveFile"
+    echo "-> Password: $torrentPierPass" | sudo tee -a "$saveFile"
+    echo "===================================" | sudo tee -a "$saveFile"
+    echo "Database credentials:" | sudo tee -a "$saveFile"
+    echo "-> Database name: $dbSql" | sudo tee -a "$saveFile"
+    echo "-> Username: $userSql" | sudo tee -a "$saveFile"
+    echo "-> Password: $passSql" | sudo tee -a "$saveFile"
     echo "===================================" | sudo tee -a $saveFile
-    echo "TorrentPier credentials:" | sudo tee -a $saveFile
-    echo "-> http://$HOST/" | sudo tee -a $saveFile
-    echo "-> Username: $torrentPierUser" | sudo tee -a $saveFile
-    echo "-> Password: $torrentPierPass" | sudo tee -a $saveFile
-    echo "===================================" | sudo tee -a $saveFile
-    echo "Database credentials:" | sudo tee -a $saveFile
-    echo "-> Database name: $dbSql" | sudo tee -a $saveFile
-    echo "-> Username: $userSql" | sudo tee -a $saveFile
-    echo "-> Password: $passSql" | sudo tee -a $saveFile
-    echo "===================================" | sudo tee -a $saveFile
-    echo "phpMyAdmin credentials:" | sudo tee -a $saveFile
-    echo "-> http://$HOST:9090/phpmyadmin" | sudo tee -a $saveFile
-    echo "-> Username: phpmyadmin" | sudo tee -a $saveFile
-    echo "-> Password: $passPma" | sudo tee -a $saveFile
-    echo "===================================" | sudo tee -a $saveFile
+    echo "DO NOT USE IT IF YOU DO NOT KNOW WHAT IT IS INTENDED FOR" | sudo tee -a "$saveFile" > /dev/null
+    echo "phpMyAdmin credentials:" | sudo tee -a "$saveFile" > /dev/null
+    echo "-> http://$HOST:9090/phpmyadmin" | sudo tee -a "$saveFile" > /dev/null
+    echo "-> Username: phpmyadmin" | sudo tee -a "$saveFile" > /dev/null
+    echo "-> Password: $passPma" | sudo tee -a "$saveFile" > /dev/null
+    echo "===================================" | sudo tee -a "$saveFile" > /dev/null
 else
     echo "Your system is not supported." 2>&1 | tee -a "$logsInst"
 fi
