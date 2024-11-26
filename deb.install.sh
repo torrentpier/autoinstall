@@ -247,8 +247,8 @@ EOF
         # Applying privilege changes
         sudo mysql -e "FLUSH PRIVILEGES;" 2>&1 | sudo tee -a "$logsInst" > /dev/null
 
-        # Exporting a database
-        { sudo cat /var/www/torrentpier/install/sql/mysql.sql | sudo mysql -u "$userSql" -p"$passSql" "$dbSql"; } 2>&1 | sudo tee -a "$logsInst" > /dev/null
+        # Import a database
+        { sudo cat /var/www/torrentpier/install/sql/mysql.sql | sudo mysql --default-character-set=utf8mb4 -u "$userSql" -p"$passSql" "$dbSql"; } 2>&1 | sudo tee -a "$logsInst" > /dev/null
 
         # We set the rights to directories and files
         sudo chown -R www-data:www-data /var/www/torrentpier 2>&1 | sudo tee -a "$logsInst" > /dev/null
