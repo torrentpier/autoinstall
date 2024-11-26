@@ -41,18 +41,18 @@ if $foundOs; then
             pkgsList=("jq" "curl" "zip" "unzip")
 
             # Updating tables and packages
-            echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            echo "===================================" 2>&1 | tee -a "$logsInst" > /dev/null
             echo "Updating tables and packages" | tee -a "$logsInst"
-            echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            echo "===================================" 2>&1 | tee -a "$logsInst" > /dev/null
             apt-get -y update 2>&1 | tee -a "$logsInst" > /dev/null
             apt-get -y dist-upgrade 2>&1 | tee -a "$logsInst" > /dev/null
 
             # Check and installation sudo
             if ! dpkg-query -W -f='${Status}' "sudo" 2>/dev/null | grep -q "install ok installed"; then
-                echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                echo "===================================" 2>&1 | tee -a "$logsInst" > /dev/null
                 echo "sudo not installed. Installation in progress..." | tee -a "$logsInst"
-                echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-                apt-get install -y sudo 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                echo "===================================" 2>&1 | tee -a "$logsInst" > /dev/null
+                apt-get install -y sudo 2>&1 | tee -a "$logsInst" > /dev/null
             fi
 
             # Package installation cycle

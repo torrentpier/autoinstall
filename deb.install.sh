@@ -144,18 +144,18 @@ if $foundOs; then
     pkgsList=("php-fpm" "php-mbstring" "php-bcmath" "php-intl" "php-tidy" "php-xml" "php-xmlwriter" "php-zip" "php-gd" "php-json" "php-curl" "nginx" "mariadb-server" "pwgen" "jq" "curl" "zip" "unzip" "cron")
 
     # Updating tables and packages
-    echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+    echo "===================================" 2>&1 | tee -a "$logsInst" > /dev/null
     echo "Updating tables and packages" | tee -a "$logsInst"
-    echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+    echo "===================================" 2>&1 | tee -a "$logsInst" > /dev/null
     apt-get -y update 2>&1 | tee -a "$logsInst" > /dev/null
     apt-get -y dist-upgrade 2>&1 | tee -a "$logsInst" > /dev/null
 
     # Check and installation sudo
     if ! dpkg-query -W -f='${Status}' "sudo" 2>/dev/null | grep -q "install ok installed"; then
-        echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+        echo "===================================" 2>&1 | tee -a "$logsInst" > /dev/null
         echo "sudo not installed. Installation in progress..." | tee -a "$logsInst"
-        echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        apt-get install -y sudo 2>&1 | sudo tee -a "$logsInst" > /dev/null
+        echo "===================================" 2>&1 | tee -a "$logsInst" > /dev/null
+        apt-get install -y sudo 2>&1 | tee -a "$logsInst" > /dev/null
     fi
 
     # Package installation cycle
@@ -163,7 +163,7 @@ if $foundOs; then
         # Checking for packages and installing packages
         if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
             echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-            echo "$package not installed. Installation in progress..." | tee -a "$logsInst"
+            echo "$package not installed. Installation in progress..." | sudo tee -a "$logsInst"
             echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
             sudo apt-get install -y "$package" 2>&1 | sudo tee -a "$logsInst" > /dev/null
         fi
@@ -177,7 +177,7 @@ if $foundOs; then
     # Installation phpMyAdmin
     if ! dpkg-query -W -f='${Status}' "phpmyadmin" 2>/dev/null | grep -q "install ok installed"; then
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        echo "phpMyAdmin not installed. Installation in progress..." | tee -a "$logsInst"
+        echo "phpMyAdmin not installed. Installation in progress..." | sudo tee -a "$logsInst"
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
 
         sudo debconf-set-selections <<EOF
@@ -195,7 +195,7 @@ EOF
         sudo systemctl restart nginx 2>&1 | sudo tee -a "$logsInst" > /dev/null
     else
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        echo "phpMyAdmin is already installed on the system. The installation cannot continue." | tee -a "$logsInst"
+        echo "phpMyAdmin is already installed on the system. The installation cannot continue." | sudo tee -a "$logsInst"
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
         read -rp "Press Enter to complete..."
         exit 1
@@ -204,7 +204,7 @@ EOF
     # Installation and setting composer
     if [ ! -f "/usr/local/bin/composer" ]; then
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        echo "composer not installed. Installation in progress..." | tee -a "$logsInst"
+        echo "composer not installed. Installation in progress..." | sudo tee -a "$logsInst"
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
         curl -sSL https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer 2>&1 | sudo tee -a "$logsInst" > /dev/null
     fi
@@ -212,7 +212,7 @@ EOF
     # Installation TorrentPier
     if [ ! -d "/var/www/torrentpier" ]; then
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        echo "TorrentPier not installed. Installation in progress..." | tee -a "$logsInst"
+        echo "TorrentPier not installed. Installation in progress..." | sudo tee -a "$logsInst"
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
         # Creating a temporary directory
         sudo mkdir -p /tmp/torrentpier 2>&1 | sudo tee -a "$logsInst" > /dev/null
@@ -259,7 +259,7 @@ EOF
         { (sudo crontab -l; echo "* * * * * sudo -u www-data php /var/www/torrentpier/cron.php") | sudo crontab -; } 2>&1 | sudo tee -a "$logsInst" > /dev/null
     else
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        echo "TorrentPier is already installed on the system. The installation cannot continue." | tee -a "$logsInst"
+        echo "TorrentPier is already installed on the system. The installation cannot continue." | sudo tee -a "$logsInst"
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
         read -rp "Press Enter to complete..."
         exit 1
@@ -268,7 +268,7 @@ EOF
     # Setting up nginx
     if dpkg-query -W -f='${Status}' "nginx" 2>/dev/null | grep -q "install ok installed"; then
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        echo "NGINX is not configured. The setup in progress..." | tee -a "$logsInst"
+        echo "NGINX is not configured. The setup in progress..." | sudo tee -a "$logsInst"
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
         # We remove the default one and create the TorrentPier config
         sudo rm /etc/nginx/sites-enabled/default 2>&1 | sudo tee -a "$logsInst" > /dev/null
@@ -280,24 +280,24 @@ EOF
         sudo systemctl restart nginx 2>&1 | sudo tee -a "$logsInst" > /dev/null
     else
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        echo "NGINX is not installed. The installation cannot continue." | tee -a "$logsInst"
+        echo "NGINX is not installed. The installation cannot continue." | sudo tee -a "$logsInst"
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
         read -rp "Press Enter to complete..."
         exit 1
     fi
 
-    echo "===================================" | tee -a $saveFile
-    echo "Link to your TorrentPier website: http://$HOST/" | tee -a $saveFile
-    echo "User: $torrentPierUser" | tee -a $saveFile
-    echo "Password: $torrentPierPass" | tee -a $saveFile
-    echo "===================================" | tee -a $saveFile
-    echo "Database: $dbSql" | tee -a $saveFile
-    echo "User to database: $userSql" | tee -a $saveFile
-    echo "Password to database: $passSql" | tee -a $saveFile
-    echo "===================================" | tee -a $saveFile
-    echo "Link to phpMyAdmin: http://$HOST:9090/phpmyadmin" | tee -a $saveFile
-    echo "Password to phpMyAdmin: $passPma" | tee -a $saveFile
-    echo "===================================" | tee -a $saveFile
+    echo "===================================" | sudo tee -a $saveFile
+    echo "Link to your TorrentPier website: http://$HOST/" | sudo tee -a $saveFile
+    echo "User: $torrentPierUser" | sudo tee -a $saveFile
+    echo "Password: $torrentPierPass" | sudo tee -a $saveFile
+    echo "===================================" | sudo tee -a $saveFile
+    echo "Database: $dbSql" | sudo tee -a $saveFile
+    echo "User to database: $userSql" | sudo tee -a $saveFile
+    echo "Password to database: $passSql" | sudo tee -a $saveFile
+    echo "===================================" | sudo tee -a $saveFile
+    echo "Link to phpMyAdmin: http://$HOST:9090/phpmyadmin" | sudo tee -a $saveFile
+    echo "Password to phpMyAdmin: $passPma" | sudo tee -a $saveFile
+    echo "===================================" | sudo tee -a $saveFile
 else
     echo "Your system is not supported." 2>&1 | tee -a "$logsInst"
 fi
