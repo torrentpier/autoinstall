@@ -296,6 +296,7 @@ EOF
     echo "Password to database: $passSql" | sudo tee -a $saveFile
     echo "===================================" | sudo tee -a $saveFile
     echo "Link to phpMyAdmin: http://$HOST:9090/phpmyadmin" | sudo tee -a $saveFile
+    echo "User to phpMyAdmin: phpmyadmin" | sudo tee -a $saveFile
     echo "Password to phpMyAdmin: $passPma" | sudo tee -a $saveFile
     echo "===================================" | sudo tee -a $saveFile
 else
