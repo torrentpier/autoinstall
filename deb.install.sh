@@ -201,10 +201,10 @@ EOF
         exit 1
     fi
 
-    # Installation and setting composer
+    # Installation and setting Composer
     if [ ! -f "/usr/local/bin/composer" ]; then
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        echo "composer not installed. Installation in progress..." | sudo tee -a "$logsInst"
+        echo "Composer not installed. Installation in progress..." | sudo tee -a "$logsInst"
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
         curl -sSL https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer 2>&1 | sudo tee -a "$logsInst" > /dev/null
     fi
@@ -286,18 +286,24 @@ EOF
         exit 1
     fi
 
+    echo "" | sudo tee -a $saveFile
+    echo "Woah! TorrentPier successfully installed!" | sudo tee -a $saveFile
+    echo "" | sudo tee -a $saveFile
     echo "===================================" | sudo tee -a $saveFile
-    echo "Link to your TorrentPier website: http://$HOST/" | sudo tee -a $saveFile
-    echo "User: $torrentPierUser" | sudo tee -a $saveFile
-    echo "Password: $torrentPierPass" | sudo tee -a $saveFile
+    echo "TorrentPier credentials:" | sudo tee -a $saveFile
+    echo "-> http://$HOST/" | sudo tee -a $saveFile
+    echo "-> Username: $torrentPierUser" | sudo tee -a $saveFile
+    echo "-> Password: $torrentPierPass" | sudo tee -a $saveFile
     echo "===================================" | sudo tee -a $saveFile
-    echo "Database: $dbSql" | sudo tee -a $saveFile
-    echo "User to database: $userSql" | sudo tee -a $saveFile
-    echo "Password to database: $passSql" | sudo tee -a $saveFile
+    echo "Database credentials:" | sudo tee -a $saveFile
+    echo "-> Database name: $dbSql" | sudo tee -a $saveFile
+    echo "-> Username: $userSql" | sudo tee -a $saveFile
+    echo "-> Password: $passSql" | sudo tee -a $saveFile
     echo "===================================" | sudo tee -a $saveFile
-    echo "Link to phpMyAdmin: http://$HOST:9090/phpmyadmin" | sudo tee -a $saveFile
-    echo "User to phpMyAdmin: phpmyadmin" | sudo tee -a $saveFile
-    echo "Password to phpMyAdmin: $passPma" | sudo tee -a $saveFile
+    echo "phpMyAdmin credentials:" | sudo tee -a $saveFile
+    echo "-> http://$HOST:9090/phpmyadmin" | sudo tee -a $saveFile
+    echo "-> Username: phpmyadmin" | sudo tee -a $saveFile
+    echo "-> Password: $passPma" | sudo tee -a $saveFile
     echo "===================================" | sudo tee -a $saveFile
 else
     echo "Your system is not supported." 2>&1 | tee -a "$logsInst"
