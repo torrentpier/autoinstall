@@ -1,6 +1,6 @@
-## Automatic installation for TorrentPier
+## Automatic installation for TorrentPier v2.4.*
 **This shell script allows you to:**
-- Install TorrentPier in automatic mode;
+- Install TorrentPier v2.4.* in automatic mode;
 ## Supported systems:
 - **GNU/Linux:** Debian 12
 - **GNU/Linux:** Ubuntu 22.04, 24.04
