@@ -72,13 +72,30 @@ chmod +x ./autoinstall/deb.install.sh && ./autoinstall/deb.install.sh --webserve
 **NGINX:**
 - phpMyAdmin config: `/etc/nginx/sites-available/00-phpmyadmin.conf`
 - TorrentPier config: `/etc/nginx/sites-available/01-torrentpier.conf`
+- Example config: `examples/nginx.conf`
 
 **Apache:**
 - phpMyAdmin config: `/etc/apache2/sites-available/00-phpmyadmin.conf`
 - TorrentPier config: `/etc/apache2/sites-available/01-torrentpier.conf`
+- Example config: `examples/apache.conf`
 
 **Caddy:**
 - Main config: `/etc/caddy/Caddyfile`
+- Example config: `examples/caddy.conf`
+
+### Security features:
+
+**NGINX and Caddy configurations include:**
+- **Directory blocking:** Prevents access to `/install/`, `/internal_data/`, `/library/`
+- **Hidden files protection:** Blocks access to `.ht*`, `.en*`, `.git/`
+- **File type restrictions:** Denies access to `.sql`, `.tpl`, `.db`, `.inc`, `.log`, `.md` files
+- **Sitemap redirect:** Automatically redirects `/sitemap.xml` to `/sitemap/sitemap.xml`
+- **Gzip/Zstd compression:** Reduces bandwidth usage (Caddy)
+- **UTF-8 charset:** Proper charset headers for HTML, CSS, JS, JSON, XML, TXT files (Caddy)
+
+**Apache configuration:**
+- Minimal setup with `AllowOverride All` enabled
+- TorrentPier's `.htaccess` file handles all security rules automatically
 
 ## Removing phpMyAdmin public access:
 
