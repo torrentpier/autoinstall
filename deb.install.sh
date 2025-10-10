@@ -765,8 +765,11 @@ $HOST:9090 {
     log_message "Adding PHP $PHP_VERSION repository"
     log_separator
     apt-get install -y lsb-release ca-certificates apt-transport-https software-properties-common gnupg2 >> "$logsInst" 2>&1
-    curl -sSL https://packages.sury.org/php/apt.gpg -o /etc/apt/trusted.gpg.d/php.gpg >> "$logsInst" 2>&1
-    echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" | tee /etc/apt/sources.list.d/php.list >> "$logsInst" 2>&1
+    
+    # Add Ondřej Surý's PPA for PHP
+    if ! grep -q "ondrej/php" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
+        LC_ALL=C.UTF-8 add-apt-repository ppa:ondrej/php -y >> "$logsInst" 2>&1
+    fi
     apt-get -y update >> "$logsInst" 2>&1
 
     # Check and installation sudo
