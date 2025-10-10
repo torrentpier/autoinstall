@@ -12,6 +12,51 @@
 
 clear
 
+# Default values
+WEB_SERVER="nginx"
+TP_VERSION="v2.4"
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --webserver)
+            WEB_SERVER="$2"
+            shift 2
+            ;;
+        --version)
+            TP_VERSION="$2"
+            shift 2
+            ;;
+        --help)
+            echo "Usage: $0 [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --webserver <nginx|apache|caddy>  Choose web server (default: nginx)"
+            echo "  --version <v2.4|v2.8>              Choose TorrentPier version (default: v2.4)"
+            echo "  --help                             Show this help message"
+            echo ""
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
+# Validate web server choice
+if [[ ! "$WEB_SERVER" =~ ^(nginx|apache|caddy)$ ]]; then
+    echo "Error: Invalid web server. Choose: nginx, apache, or caddy"
+    exit 1
+fi
+
+# Validate version choice
+if [[ ! "$TP_VERSION" =~ ^(v2\.4|v2\.8)$ ]]; then
+    echo "Error: Invalid version. Choose: v2.4 or v2.8"
+    exit 1
+fi
+
 # Arrays and variables used
 suppOs=("debian" "ubuntu")
 currOs=$(grep ^ID= /etc/os-release | awk -F= '{print $2}')
@@ -104,7 +149,7 @@ if $foundOs; then
 
     location ~ \.php$ {
         include fastcgi_params;
-        fastcgi_pass unix:/run/php/php-fpm.sock;
+        fastcgi_pass unix:/run/php/php8.4-fpm.sock;
         fastcgi_index index.php;
         fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
         include fastcgi_params;
@@ -133,15 +178,82 @@ if $foundOs; then
 
     location ~ \.php$ {
         include fastcgi_params;
-        fastcgi_pass unix:/run/php/php-fpm.sock;
+        fastcgi_pass unix:/run/php/php8.4-fpm.sock;
         fastcgi_index index.php;
         fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
         include fastcgi_params;
     }
 }"
 
+    # Apache configuration file for TorrentPier
+    apache_torrentpier="<VirtualHost *:80>
+    ServerName $HOST
+    DocumentRoot /var/www/torrentpier
+
+    <Directory /var/www/torrentpier>
+        Options -Indexes +FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    <FilesMatch \\.php$>
+        SetHandler \"proxy:unix:/run/php/php8.4-fpm.sock|fcgi://localhost\"
+    </FilesMatch>
+
+    ErrorLog \${APACHE_LOG_DIR}/torrentpier_error.log
+    CustomLog \${APACHE_LOG_DIR}/torrentpier_access.log combined
+</VirtualHost>"
+
+    # Apache configuration file for phpMyAdmin
+    apache_phpmyadmin="<VirtualHost *:9090>
+    ServerName $HOST
+    DocumentRoot /usr/share/phpmyadmin
+
+    <Directory /usr/share/phpmyadmin>
+        Options -Indexes +FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    <FilesMatch \\.php$>
+        SetHandler \"proxy:unix:/run/php/php8.4-fpm.sock|fcgi://localhost\"
+    </FilesMatch>
+
+    ErrorLog \${APACHE_LOG_DIR}/phpmyadmin_error.log
+    CustomLog \${APACHE_LOG_DIR}/phpmyadmin_access.log combined
+</VirtualHost>"
+
+    # Caddy configuration file
+    caddy_config="$HOST {
+    root * /var/www/torrentpier
+    encode gzip
+    php_fastcgi unix//run/php/php8.4-fpm.sock
+    file_server
+}
+
+$HOST:9090 {
+    root * /usr/share/phpmyadmin
+    encode gzip
+    php_fastcgi unix//run/php/php8.4-fpm.sock
+    file_server
+}"
+
     # Packages for installation, TorrentPier, phpMyAdmin
-    pkgsList=("php-fpm" "php-mbstring" "php-bcmath" "php-intl" "php-tidy" "php-xml" "php-xmlwriter" "php-zip" "php-gd" "php-json" "php-curl" "nginx" "mariadb-server" "pwgen" "jq" "curl" "zip" "unzip" "cron")
+    # Base packages (PHP 8.4)
+    pkgsList=("php8.4-fpm" "php8.4-mbstring" "php8.4-bcmath" "php8.4-intl" "php8.4-tidy" "php8.4-xml" "php8.4-zip" "php8.4-gd" "php8.4-curl" "php8.4-mysql" "mariadb-server" "pwgen" "jq" "curl" "zip" "unzip" "cron")
+    
+    # Add web server specific packages
+    case "$WEB_SERVER" in
+        nginx)
+            pkgsList+=("nginx")
+            ;;
+        apache)
+            pkgsList+=("apache2" "libapache2-mod-fcgid")
+            ;;
+        caddy)
+            pkgsList+=("debian-keyring" "debian-archive-keyring" "apt-transport-https")
+            ;;
+    esac
 
     # Updating tables and packages
     echo "===================================" 2>&1 | tee -a "$logsInst" > /dev/null
@@ -150,12 +262,33 @@ if $foundOs; then
     apt-get -y update 2>&1 | tee -a "$logsInst" > /dev/null
     apt-get -y dist-upgrade 2>&1 | tee -a "$logsInst" > /dev/null
 
+    # Add PHP 8.4 repository
+    echo "===================================" 2>&1 | tee -a "$logsInst" > /dev/null
+    echo "Adding PHP 8.4 repository" | tee -a "$logsInst"
+    echo "===================================" 2>&1 | tee -a "$logsInst" > /dev/null
+    apt-get install -y lsb-release ca-certificates apt-transport-https software-properties-common gnupg2 2>&1 | tee -a "$logsInst" > /dev/null
+    curl -sSL https://packages.sury.org/php/apt.gpg -o /etc/apt/trusted.gpg.d/php.gpg 2>&1 | tee -a "$logsInst" > /dev/null
+    echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" | tee /etc/apt/sources.list.d/php.list 2>&1 | tee -a "$logsInst" > /dev/null
+    apt-get -y update 2>&1 | tee -a "$logsInst" > /dev/null
+
     # Check and installation sudo
     if ! dpkg-query -W -f='${Status}' "sudo" 2>/dev/null | grep -q "install ok installed"; then
         echo "===================================" 2>&1 | tee -a "$logsInst" > /dev/null
         echo "sudo not installed. Installation in progress..." | tee -a "$logsInst"
         echo "===================================" 2>&1 | tee -a "$logsInst" > /dev/null
         apt-get install -y sudo 2>&1 | tee -a "$logsInst" > /dev/null
+    fi
+
+    # Install Caddy repository if needed
+    if [ "$WEB_SERVER" == "caddy" ]; then
+        if ! dpkg-query -W -f='${Status}' "caddy" 2>/dev/null | grep -q "install ok installed"; then
+            echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            echo "Adding Caddy repository..." | sudo tee -a "$logsInst"
+            echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            sudo apt-get update 2>&1 | sudo tee -a "$logsInst" > /dev/null
+        fi
     fi
 
     # Package installation cycle
@@ -168,6 +301,16 @@ if $foundOs; then
             sudo apt-get install -y "$package" 2>&1 | sudo tee -a "$logsInst" > /dev/null
         fi
     done
+    
+    # Install Caddy separately
+    if [ "$WEB_SERVER" == "caddy" ]; then
+        if ! dpkg-query -W -f='${Status}' "caddy" 2>/dev/null | grep -q "install ok installed"; then
+            echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            echo "caddy not installed. Installation in progress..." | sudo tee -a "$logsInst"
+            echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            sudo apt-get install -y caddy 2>&1 | sudo tee -a "$logsInst" > /dev/null
+        fi
+    fi
 
     passPma="$(pwgen -1Bs 12)"
     dbSql="torrentpier_$(pwgen -1 8)"
@@ -187,12 +330,26 @@ phpmyadmin phpmyadmin/password-confirm password $passPma
 phpmyadmin phpmyadmin/reconfigure-webserver multiselect
 EOF
         sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y phpmyadmin 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        echo -e "$nginx_phpmyadmin" | sudo tee /etc/nginx/sites-available/00-phpmyadmin.conf 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        sudo ln -s /etc/nginx/sites-available/00-phpmyadmin.conf /etc/nginx/sites-enabled/ 2>&1 | sudo tee -a "$logsInst" > /dev/null
-
-        # Checking and running the NGINX configuration file
-        sudo nginx -t 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        sudo systemctl restart nginx 2>&1 | sudo tee -a "$logsInst" > /dev/null
+        
+        # Configure phpMyAdmin for selected web server
+        case "$WEB_SERVER" in
+            nginx)
+                echo -e "$nginx_phpmyadmin" | sudo tee /etc/nginx/sites-available/00-phpmyadmin.conf 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                sudo ln -s /etc/nginx/sites-available/00-phpmyadmin.conf /etc/nginx/sites-enabled/ 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                sudo nginx -t 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                sudo systemctl restart nginx 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                ;;
+            apache)
+                echo -e "$apache_phpmyadmin" | sudo tee /etc/apache2/sites-available/00-phpmyadmin.conf 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                sudo a2ensite 00-phpmyadmin 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                sudo apache2ctl configtest 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                sudo systemctl restart apache2 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                ;;
+            caddy)
+                # Caddy config already includes phpMyAdmin
+                sudo systemctl reload caddy 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                ;;
+        esac
     else
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
         echo "phpMyAdmin is already installed on the system. The installation cannot continue." | sudo tee -a "$logsInst"
@@ -217,8 +374,12 @@ EOF
         # Creating a temporary directory
         sudo mkdir -p /tmp/torrentpier 2>&1 | sudo tee -a "$logsInst" > /dev/null
 
-        # Downloading TorrentPier
-        curl -s https://api.github.com/repos/torrentpier/torrentpier/releases | jq -r 'map(select(.prerelease == false and (.tag_name | test("^v2\\.4\\.")))) | .[0].zipball_url' | xargs -n 1 curl -L -o /tmp/torrentpier/torrentpier.zip 2>&1 | sudo tee -a "$logsInst" > /dev/null
+        # Downloading TorrentPier based on selected version
+        if [ "$TP_VERSION" == "v2.4" ]; then
+            curl -s https://api.github.com/repos/torrentpier/torrentpier/releases | jq -r 'map(select(.prerelease == false and (.tag_name | test("^v2\\.4\\.")))) | .[0].zipball_url' | xargs -n 1 curl -L -o /tmp/torrentpier/torrentpier.zip 2>&1 | sudo tee -a "$logsInst" > /dev/null
+        elif [ "$TP_VERSION" == "v2.8" ]; then
+            curl -s https://api.github.com/repos/torrentpier/torrentpier/releases | jq -r 'map(select(.prerelease == false and (.tag_name | test("^v2\\.8\\.")))) | .[0].zipball_url' | xargs -n 1 curl -L -o /tmp/torrentpier/torrentpier.zip 2>&1 | sudo tee -a "$logsInst" > /dev/null
+        fi
         sudo unzip -o /tmp/torrentpier/torrentpier.zip -d /tmp/torrentpier 2>&1 | sudo tee -a "$logsInst" > /dev/null
         sudo mv /tmp/torrentpier/torrentpier-torrentpier-* /var/www/torrentpier 2>&1 | sudo tee -a "$logsInst" > /dev/null
 
@@ -256,7 +417,7 @@ EOF
         sudo find /var/www/torrentpier -type d -exec chmod 755 {} \; 2>&1 | sudo tee -a "$logsInst" > /dev/null
 
         # Setting the CRON task
-        { (sudo crontab -l; echo "* * * * * sudo -u www-data php /var/www/torrentpier/cron.php") | sudo crontab -; } 2>&1 | sudo tee -a "$logsInst" > /dev/null
+        { (sudo crontab -l; echo "*/10 * * * * sudo -u www-data php /var/www/torrentpier/cron.php") | sudo crontab -; } 2>&1 | sudo tee -a "$logsInst" > /dev/null
     else
         echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
         echo "TorrentPier is already installed on the system. The installation cannot continue." | sudo tee -a "$logsInst"
@@ -265,26 +426,78 @@ EOF
         exit 1
     fi
 
-    # Setting up nginx
-    if dpkg-query -W -f='${Status}' "nginx" 2>/dev/null | grep -q "install ok installed"; then
-        echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        echo "NGINX is not configured. The setup in progress..." | sudo tee -a "$logsInst"
-        echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        # We remove the default one and create the TorrentPier config
-        sudo rm /etc/nginx/sites-enabled/default 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        echo -e "$nginx_torrentpier" | sudo tee /etc/nginx/sites-available/01-torrentpier.conf 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        sudo ln -s /etc/nginx/sites-available/01-torrentpier.conf /etc/nginx/sites-enabled/ 2>&1 | sudo tee -a "$logsInst" > /dev/null
+    # Setting up web server
+    case "$WEB_SERVER" in
+        nginx)
+            if dpkg-query -W -f='${Status}' "nginx" 2>/dev/null | grep -q "install ok installed"; then
+                echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                echo "NGINX is not configured. The setup in progress..." | sudo tee -a "$logsInst"
+                echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                # We remove the default one and create the TorrentPier config
+                sudo rm /etc/nginx/sites-enabled/default 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                echo -e "$nginx_torrentpier" | sudo tee /etc/nginx/sites-available/01-torrentpier.conf 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                sudo ln -s /etc/nginx/sites-available/01-torrentpier.conf /etc/nginx/sites-enabled/ 2>&1 | sudo tee -a "$logsInst" > /dev/null
 
-        # We are testing and running the NGINX config
-        sudo nginx -t 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        sudo systemctl restart nginx 2>&1 | sudo tee -a "$logsInst" > /dev/null
-    else
-        echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        echo "NGINX is not installed. The installation cannot continue." | sudo tee -a "$logsInst"
-        echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-        read -rp "Press Enter to complete..."
-        exit 1
-    fi
+                # We are testing and running the NGINX config
+                sudo nginx -t 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                sudo systemctl restart nginx 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            else
+                echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                echo "NGINX is not installed. The installation cannot continue." | sudo tee -a "$logsInst"
+                echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                read -rp "Press Enter to complete..."
+                exit 1
+            fi
+            ;;
+        apache)
+            if dpkg-query -W -f='${Status}' "apache2" 2>/dev/null | grep -q "install ok installed"; then
+                echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                echo "Apache is not configured. The setup in progress..." | sudo tee -a "$logsInst"
+                echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                # Enable required modules
+                sudo a2enmod proxy_fcgi setenvif rewrite 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                sudo a2enconf php8.4-fpm 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                
+                # Create port 9090 configuration for Apache
+                if ! grep -q "Listen 9090" /etc/apache2/ports.conf; then
+                    echo "Listen 9090" | sudo tee -a /etc/apache2/ports.conf 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                fi
+                
+                # Disable default site and create TorrentPier config
+                sudo a2dissite 000-default 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                echo -e "$apache_torrentpier" | sudo tee /etc/apache2/sites-available/01-torrentpier.conf 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                sudo a2ensite 01-torrentpier 2>&1 | sudo tee -a "$logsInst" > /dev/null
+
+                # We are testing and running the Apache config
+                sudo apache2ctl configtest 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                sudo systemctl restart apache2 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            else
+                echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                echo "Apache is not installed. The installation cannot continue." | sudo tee -a "$logsInst"
+                echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                read -rp "Press Enter to complete..."
+                exit 1
+            fi
+            ;;
+        caddy)
+            if dpkg-query -W -f='${Status}' "caddy" 2>/dev/null | grep -q "install ok installed"; then
+                echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                echo "Caddy is not configured. The setup in progress..." | sudo tee -a "$logsInst"
+                echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                # Create Caddy config
+                echo -e "$caddy_config" | sudo tee /etc/caddy/Caddyfile 2>&1 | sudo tee -a "$logsInst" > /dev/null
+
+                # Reload Caddy config
+                sudo systemctl reload caddy 2>&1 | sudo tee -a "$logsInst" > /dev/null
+            else
+                echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                echo "Caddy is not installed. The installation cannot continue." | sudo tee -a "$logsInst"
+                echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                read -rp "Press Enter to complete..."
+                exit 1
+            fi
+            ;;
+    esac
 
     echo "" | sudo tee -a "$saveFile"
     echo "Woah! TorrentPier successfully installed!" | sudo tee -a "$saveFile"
