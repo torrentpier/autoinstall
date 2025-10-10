@@ -995,11 +995,26 @@ EOF
         # Applying privilege changes
         mysql -e "FLUSH PRIVILEGES;" >> "$logsInst" 2>&1
 
-        # Import a database (using MYSQL_PWD to avoid password in process list)
-        if [ ! -f "$TORRENTPIER_PATH/install/sql/mysql.sql" ]; then
-            error_exit "SQL file not found: $TORRENTPIER_PATH/install/sql/mysql.sql"
+        # Import/Initialize database based on TorrentPier version
+        if [ "$TP_VERSION" == "v2.4" ]; then
+            # v2.4: Import database from SQL dump
+            log_separator
+            print_info "Importing database from SQL dump (v2.4)..."
+            log_separator
+            if [ ! -f "$TORRENTPIER_PATH/install/sql/mysql.sql" ]; then
+                error_exit "SQL file not found: $TORRENTPIER_PATH/install/sql/mysql.sql"
+            fi
+            { MYSQL_PWD="$passSql" mysql --default-character-set=utf8mb4 -u "$userSql" "$dbSql" < "$TORRENTPIER_PATH/install/sql/mysql.sql"; } >> "$logsInst" 2>&1 || error_exit "Failed to import database"
+            print_success "Database imported successfully"
+        elif [ "$TP_VERSION" == "v2.8" ]; then
+            # v2.8: Run Phinx migrations
+            log_separator
+            print_info "Running Phinx migrations (v2.8)..."
+            log_separator
+            cd "$TORRENTPIER_PATH" || error_exit "Failed to change directory to $TORRENTPIER_PATH"
+            php vendor/bin/phinx migrate --configuration=phinx.php >> "$logsInst" 2>&1 || error_exit "Failed to run Phinx migrations"
+            print_success "Database migrations completed successfully"
         fi
-        { MYSQL_PWD="$passSql" mysql --default-character-set=utf8mb4 -u "$userSql" "$dbSql" < "$TORRENTPIER_PATH/install/sql/mysql.sql"; } >> "$logsInst" 2>&1 || error_exit "Failed to import database"
 
         # We set the rights to directories and files
         chown -R www-data:www-data "$TORRENTPIER_PATH" >> "$logsInst" 2>&1
