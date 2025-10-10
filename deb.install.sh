@@ -753,6 +753,14 @@ $HOST:9090 {
             ;;
     esac
 
+    # Remove old sury.org repository if exists (it's blocked)
+    if [ -f /etc/apt/sources.list.d/php.list ]; then
+        log_separator
+        print_warning "Removing old blocked php.list repository"
+        log_separator
+        rm -f /etc/apt/sources.list.d/php.list >> "$logsInst" 2>&1
+    fi
+
     # Updating tables and packages
     log_separator
     log_message "Updating tables and packages"
@@ -765,12 +773,6 @@ $HOST:9090 {
     log_message "Adding PHP $PHP_VERSION repository"
     log_separator
     apt-get install -y lsb-release ca-certificates apt-transport-https software-properties-common >> "$logsInst" 2>&1
-    
-    # Remove old sury.org repository if exists (it's blocked)
-    if [ -f /etc/apt/sources.list.d/php.list ]; then
-        rm -f /etc/apt/sources.list.d/php.list >> "$logsInst" 2>&1
-        print_info "Removed old php.list repository"
-    fi
     
     # Add Ondřej Surý's PPA for PHP (via Launchpad, more reliable)
     if ! grep -q "ondrej/php" /etc/apt/sources.list.d/* 2>/dev/null; then
