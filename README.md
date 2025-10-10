@@ -27,18 +27,26 @@ chmod +x ./autoinstall/install.sh
 ```
 **Run automatic installation**
 ```bash
-# Default installation (NGINX, v2.4)
+# Default installation (NGINX, v2.4, SSL auto)
 ./autoinstall/install.sh
 
 # With custom options
 ./autoinstall/install.sh --webserver nginx --version v2.4
 ./autoinstall/install.sh --webserver apache --version v2.8
 ./autoinstall/install.sh --webserver caddy --version v2.4
+
+# With SSL and email (for domain)
+./autoinstall/install.sh --webserver nginx --version v2.4 --email admin@example.com
+
+# Disable SSL (use HTTP only)
+./autoinstall/install.sh --webserver nginx --ssl no
 ```
 
 **Available options:**
 - `--webserver <nginx|apache|caddy>` - Choose web server (default: nginx)
 - `--version <v2.4|v2.8>` - Choose TorrentPier version (default: v2.4)
+- `--ssl <auto|yes|no>` - Enable SSL/TLS (default: auto - enabled for domains only)
+- `--email <email@example.com>` - Email for SSL certificate (required if domain is used)
 - `--help` - Show help message
 
 > [!NOTE]
@@ -52,6 +60,9 @@ chmod +x ./autoinstall/deb.install.sh && ./autoinstall/deb.install.sh --webserve
 ## Additional information:
 - **Web server:** NGINX/Apache/Caddy + PHP 8.4-FPM (configurable)
 - **PHP version:** 8.4 (latest from Ondřej Surý's repository)
+- **SSL/TLS:** Automatic Let's Encrypt certificates (for domains)
+  - **Caddy:** Built-in automatic HTTPS
+  - **NGINX/Apache:** Certbot with auto-renewal
 - **Cron schedule:** Every 10 minutes
 - **Installation logs directory:** /var/log/torrentpier_install.log
 - **Temporary directory:** /tmp/torrentpier
