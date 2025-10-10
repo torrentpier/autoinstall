@@ -14,10 +14,34 @@
 set -e
 set -u
 
+# Color codes for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Color output functions
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1" | tee -a "$logsInst" >&2
+}
+
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1" | tee -a "$logsInst"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1" | tee -a "$logsInst"
+}
+
+print_info() {
+    echo -e "${BLUE}[INFO]${NC} $1" | tee -a "$logsInst"
+}
+
 # Error handler
 error_exit() {
-    echo "ERROR: $1" | tee -a "$logsInst" >&2
-    echo "Installation failed. Check log file: $logsInst" | tee -a "$logsInst" >&2
+    print_error "$1"
+    print_error "Installation failed. Check log file: $logsInst"
     exit 1
 }
 
@@ -30,6 +54,7 @@ TP_VERSION="v2.4"
 SSL_ENABLE="auto"
 SSL_EMAIL=""
 PHP_VERSION="8.4"
+DRY_RUN=false
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -42,6 +67,10 @@ while [[ $# -gt 0 ]]; do
             TP_VERSION="$2"
             shift 2
             ;;
+        --php-version)
+            PHP_VERSION="$2"
+            shift 2
+            ;;
         --ssl)
             SSL_ENABLE="$2"
             shift 2
@@ -50,14 +79,20 @@ while [[ $# -gt 0 ]]; do
             SSL_EMAIL="$2"
             shift 2
             ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
         --help)
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
             echo "  --webserver <nginx|apache|caddy>  Choose web server (default: nginx)"
             echo "  --version <v2.4|v2.8>              Choose TorrentPier version (default: v2.4)"
+            echo "  --php-version <8.2|8.3|8.4>        Choose PHP version (default: 8.4)"
             echo "  --ssl <auto|yes|no>                Enable SSL/TLS (default: auto - only for domains)"
             echo "  --email <email@example.com>        Email for SSL certificate (required if domain is used)"
+            echo "  --dry-run                          Test mode - check requirements without installing"
             echo "  --help                             Show this help message"
             echo ""
             exit 0
@@ -88,6 +123,12 @@ if [[ ! "$SSL_ENABLE" =~ ^(auto|yes|no)$ ]]; then
     exit 1
 fi
 
+# Validate PHP version choice
+if [[ ! "$PHP_VERSION" =~ ^(8\.2|8\.3|8\.4)$ ]]; then
+    echo "Error: Invalid PHP version. Choose: 8.2, 8.3, or 8.4"
+    exit 1
+fi
+
 # Arrays and variables used
 suppOs=("debian" "ubuntu")
 currOs=$(grep ^ID= /etc/os-release | awk -F= '{print $2}')
@@ -98,10 +139,11 @@ saveFile="/root/torrentpier.cfg"
 TORRENTPIER_PATH="/var/www/torrentpier"
 TEMP_PATH="/tmp/torrentpier"
 PHPMYADMIN_PATH="/usr/share/phpmyadmin"
+LOCK_FILE="/var/lock/torrentpier_install.lock"
 
-# TorrentPier auth (generated secure passwords)
+# TorrentPier auth (default credentials)
 torrentPierUser="admin"
-torrentPierPass="$(pwgen -1Bs 16)"
+torrentPierPass="admin"
 
 # User verification
 if [ "$(whoami)" != "root" ]; then
@@ -109,13 +151,279 @@ if [ "$(whoami)" != "root" ]; then
     exit 1
 fi
 
-# Logging function
+# Lock file check to prevent concurrent installations
+if [ -f "$LOCK_FILE" ]; then
+    print_error "Another installation is already running (lock file exists: $LOCK_FILE)"
+    print_error "If you're sure no other installation is running, remove the lock file manually:"
+    print_error "  rm $LOCK_FILE"
+    exit 1
+fi
+
+# Create lock file
+touch "$LOCK_FILE" || error_exit "Failed to create lock file"
+
+# Start installation timer
+START_TIME=$(date +%s)
+
+# Remove lock file on exit
+cleanup() {
+    rm -f "$LOCK_FILE"
+}
+trap cleanup EXIT
+
+# Logging function (default to info)
 log_message() {
-    echo "$1" | tee -a "$logsInst"
+    print_info "$1"
 }
 
 log_separator() {
-    echo "===================================" | tee -a "$logsInst"
+    echo -e "${BLUE}===================================${NC}" | tee -a "$logsInst"
+}
+
+# Calculate installation time
+calculate_time() {
+    local end_time=$(date +%s)
+    local duration=$((end_time - START_TIME))
+    local hours=$((duration / 3600))
+    local minutes=$(((duration % 3600) / 60))
+    local seconds=$((duration % 60))
+    
+    if [ $hours -gt 0 ]; then
+        echo "${hours}h ${minutes}m ${seconds}s"
+    elif [ $minutes -gt 0 ]; then
+        echo "${minutes}m ${seconds}s"
+    else
+        echo "${seconds}s"
+    fi
+}
+
+# Health check function
+perform_health_check() {
+    local all_ok=true
+    
+    echo ""
+    log_separator
+    print_info "Performing post-installation health check..."
+    log_separator
+    echo ""
+    
+    # Check web server
+    echo -n "🌐 Checking web server ($WEB_SERVER)... "
+    if systemctl is-active --quiet "$WEB_SERVER" 2>/dev/null; then
+        echo -e "${GREEN}✓ Running${NC}"
+    else
+        echo -e "${RED}✗ Not running${NC}"
+        all_ok=false
+    fi
+    
+    # Check PHP-FPM
+    echo -n "🐘 Checking PHP $PHP_VERSION-FPM... "
+    if systemctl is-active --quiet "php$PHP_VERSION-fpm" 2>/dev/null; then
+        echo -e "${GREEN}✓ Running${NC}"
+    else
+        echo -e "${RED}✗ Not running${NC}"
+        all_ok=false
+    fi
+    
+    # Check MariaDB
+    echo -n "🗄️  Checking MariaDB... "
+    if systemctl is-active --quiet mariadb 2>/dev/null || systemctl is-active --quiet mysql 2>/dev/null; then
+        echo -e "${GREEN}✓ Running${NC}"
+    else
+        echo -e "${RED}✗ Not running${NC}"
+        all_ok=false
+    fi
+    
+    # Check website accessibility
+    echo -n "🌍 Checking website accessibility... "
+    if curl -sf -o /dev/null -m 10 "$PROTOCOL://$HOST/" 2>/dev/null; then
+        echo -e "${GREEN}✓ Accessible${NC}"
+    else
+        echo -e "${YELLOW}⚠ Not accessible (might need DNS or firewall config)${NC}"
+    fi
+    
+    # Check phpMyAdmin
+    echo -n "💾 Checking phpMyAdmin... "
+    if curl -sf -o /dev/null -m 10 "$PROTOCOL://$HOST:9090/phpmyadmin/" 2>/dev/null; then
+        echo -e "${GREEN}✓ Accessible${NC}"
+    else
+        echo -e "${YELLOW}⚠ Not accessible${NC}"
+    fi
+    
+    # Check database connection
+    echo -n "🔗 Checking database connection... "
+    if MYSQL_PWD="$passSql" mysql -u "$userSql" -e "SELECT 1;" "$dbSql" &>/dev/null; then
+        echo -e "${GREEN}✓ Connected${NC}"
+    else
+        echo -e "${RED}✗ Connection failed${NC}"
+        all_ok=false
+    fi
+    
+    # Check TorrentPier files
+    echo -n "📁 Checking TorrentPier files... "
+    if [ -f "$TORRENTPIER_PATH/index.php" ] && [ -f "$TORRENTPIER_PATH/.env" ]; then
+        echo -e "${GREEN}✓ Present${NC}"
+    else
+        echo -e "${RED}✗ Missing files${NC}"
+        all_ok=false
+    fi
+    
+    # Check vendor directory
+    echo -n "📦 Checking Composer dependencies... "
+    if [ -d "$TORRENTPIER_PATH/vendor" ] && [ -f "$TORRENTPIER_PATH/vendor/autoload.php" ]; then
+        echo -e "${GREEN}✓ Installed${NC}"
+    else
+        echo -e "${RED}✗ Not installed${NC}"
+        all_ok=false
+    fi
+    
+    # Check cron job
+    echo -n "⏰ Checking cron job... "
+    if crontab -l 2>/dev/null | grep -q "$TORRENTPIER_PATH/cron.php"; then
+        echo -e "${GREEN}✓ Configured${NC}"
+    else
+        echo -e "${YELLOW}⚠ Not configured${NC}"
+    fi
+    
+    # Check file permissions
+    echo -n "🔒 Checking file permissions... "
+    if [ "$(stat -c '%U' "$TORRENTPIER_PATH")" = "www-data" ]; then
+        echo -e "${GREEN}✓ Correct${NC}"
+    else
+        echo -e "${YELLOW}⚠ Incorrect owner${NC}"
+    fi
+    
+    echo ""
+    log_separator
+    
+    if [ "$all_ok" = true ]; then
+        print_success "Health check passed! All critical services are running."
+    else
+        print_warning "Health check completed with warnings. Some services may need attention."
+    fi
+    
+    log_separator
+    echo ""
+}
+
+# Print final summary
+print_final_summary() {
+    local install_time=$(calculate_time)
+    
+    echo ""
+    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║                                                              ║${NC}"
+    echo -e "${GREEN}║          🎉 TorrentPier Installation Complete! 🎉           ║${NC}"
+    echo -e "${GREEN}║                                                              ║${NC}"
+    echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${BLUE}⏱️  Installation Time:${NC} $install_time"
+    echo ""
+    echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║ 📋 INSTALLATION SUMMARY                                      ║${NC}"
+    echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${YELLOW}🌐 Access Information:${NC}"
+    echo -e "   ${GREEN}➜${NC} TorrentPier URL:    ${BLUE}$PROTOCOL://$HOST/${NC}"
+    echo -e "   ${GREEN}➜${NC} phpMyAdmin URL:     ${BLUE}$PROTOCOL://$HOST:9090/phpmyadmin${NC}"
+    echo ""
+    echo -e "${YELLOW}🔐 TorrentPier Credentials:${NC}"
+    echo -e "   ${GREEN}➜${NC} Username:  ${BLUE}$torrentPierUser${NC}"
+    echo -e "   ${GREEN}➜${NC} Password:  ${BLUE}$torrentPierPass${NC}"
+    echo ""
+    echo -e "${YELLOW}🗄️  Database Information:${NC}"
+    echo -e "   ${GREEN}➜${NC} Database:  ${BLUE}$dbSql${NC}"
+    echo -e "   ${GREEN}➜${NC} Username:  ${BLUE}$userSql${NC}"
+    echo -e "   ${GREEN}➜${NC} Password:  ${BLUE}$passSql${NC}"
+    echo ""
+    echo -e "${YELLOW}💾 Configuration:${NC}"
+    echo -e "   ${GREEN}➜${NC} Web Server:      ${BLUE}$WEB_SERVER${NC}"
+    echo -e "   ${GREEN}➜${NC} PHP Version:     ${BLUE}$PHP_VERSION${NC}"
+    echo -e "   ${GREEN}➜${NC} TorrentPier:     ${BLUE}$TP_VERSION${NC}"
+    [ "$USE_SSL" = true ] && echo -e "   ${GREEN}➜${NC} SSL/TLS:         ${GREEN}Enabled${NC} (${SSL_EMAIL})"
+    echo ""
+    echo -e "${YELLOW}📁 Important Files:${NC}"
+    echo -e "   ${GREEN}➜${NC} Config file:     ${BLUE}$saveFile${NC}"
+    echo -e "   ${GREEN}➜${NC} Install log:     ${BLUE}$logsInst${NC}"
+    echo -e "   ${GREEN}➜${NC} Application:     ${BLUE}$TORRENTPIER_PATH${NC}"
+    echo ""
+    echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "${GREEN}✨ Next Steps:${NC}"
+    echo -e "   ${YELLOW}1.${NC} Open your browser: ${BLUE}$PROTOCOL://$HOST/${NC}"
+    echo -e "   ${YELLOW}2.${NC} Login with credentials above"
+    echo -e "   ${YELLOW}3.${NC} ${RED}IMPORTANT:${NC} Change default admin password immediately!"
+    [ "$USE_SSL" = false ] && echo -e "   ${YELLOW}4.${NC} ${YELLOW}Consider enabling SSL for production${NC}"
+    echo ""
+    echo -e "${GREEN}🎯 Good luck with your tracker!${NC}"
+    echo ""
+}
+
+# System requirements check functions
+check_ram() {
+    local min_ram=512 # MB
+    local available_ram=$(free -m | awk '/^Mem:/{print $2}')
+    
+    if [ "$available_ram" -lt "$min_ram" ]; then
+        error_exit "Insufficient RAM. Required: ${min_ram}MB, Available: ${available_ram}MB"
+    fi
+    print_success "RAM check passed: ${available_ram}MB available"
+}
+
+check_disk_space() {
+    local min_space=2 # GB
+    local available_space=$(df -BG / | awk 'NR==2 {print $4}' | sed 's/G//')
+    
+    if [ "$available_space" -lt "$min_space" ]; then
+        error_exit "Insufficient disk space. Required: ${min_space}GB, Available: ${available_space}GB"
+    fi
+    print_success "Disk space check passed: ${available_space}GB available"
+}
+
+check_port() {
+    local port=$1
+    local service=$2
+    
+    if ss -tuln | grep -q ":$port "; then
+        print_warning "Port $port is already in use (required for $service)"
+        return 1
+    fi
+    return 0
+}
+
+check_ports() {
+    print_info "Checking required ports availability..."
+    local ports_ok=true
+    
+    check_port 80 "HTTP" || ports_ok=false
+    check_port 443 "HTTPS" || ports_ok=false
+    check_port 9090 "phpMyAdmin" || ports_ok=false
+    
+    if [ "$ports_ok" = false ]; then
+        print_error "Some required ports are already in use!"
+        read -p "Continue anyway? (y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            exit 1
+        fi
+    else
+        print_success "All required ports are available"
+    fi
+}
+
+check_mariadb() {
+    print_info "Checking MariaDB status..."
+    
+    if ! systemctl is-active --quiet mariadb && ! systemctl is-active --quiet mysql; then
+        print_warning "MariaDB/MySQL is not running. Attempting to start..."
+        if systemctl start mariadb 2>/dev/null || systemctl start mysql 2>/dev/null; then
+            print_success "MariaDB/MySQL started successfully"
+        else
+            error_exit "Failed to start MariaDB/MySQL. Please check the service status."
+        fi
+    else
+        print_success "MariaDB/MySQL is running"
+    fi
 }
 
 # Checking for system support
@@ -128,6 +436,39 @@ for os in "${suppOs[@]}"; do
 done
 
 if $foundOs; then
+    # Run system requirements checks
+    print_info "Running system requirements checks..."
+    check_ram
+    check_disk_space
+    check_ports
+    echo ""
+    
+    # Dry-run mode - show what would be installed and exit
+    if [ "$DRY_RUN" = true ]; then
+        print_info "DRY-RUN MODE - No actual installation will be performed"
+        echo ""
+        log_separator
+        print_info "Configuration Summary:"
+        echo "  Web Server: $WEB_SERVER"
+        echo "  TorrentPier Version: $TP_VERSION"
+        echo "  PHP Version: $PHP_VERSION"
+        echo "  SSL/TLS: $SSL_ENABLE"
+        [ -n "$SSL_EMAIL" ] && echo "  SSL Email: $SSL_EMAIL"
+        log_separator
+        echo ""
+        print_info "Packages to be installed:"
+        echo "  - php$PHP_VERSION-fpm php$PHP_VERSION-mbstring php$PHP_VERSION-bcmath"
+        echo "  - php$PHP_VERSION-intl php$PHP_VERSION-tidy php$PHP_VERSION-xml"
+        echo "  - php$PHP_VERSION-zip php$PHP_VERSION-gd php$PHP_VERSION-curl php$PHP_VERSION-mysql"
+        echo "  - mariadb-server composer"
+        echo "  - $WEB_SERVER"
+        [ "$USE_SSL" = true ] && echo "  - certbot python3-certbot-$WEB_SERVER"
+        echo ""
+        print_success "Dry-run completed successfully!"
+        print_info "Run without --dry-run to perform actual installation"
+        exit 0
+    fi
+    
     # A function to check whether a string is an IP address
     is_ip() {
         local ip="$1"
@@ -204,16 +545,16 @@ if $foundOs; then
             fi
             
             log_separator
-            log_message "SSL will be automatically configured for domain: $HOST"
-            log_message "Email for certificates: $SSL_EMAIL"
+            print_success "SSL will be automatically configured for domain: $HOST"
+            print_info "Email for certificates: $SSL_EMAIL"
             log_separator
         fi
     else
         # It's an IP address
         if [ "$SSL_ENABLE" = "yes" ]; then
             log_separator
-            log_message "Warning: SSL cannot be automatically configured for IP addresses."
-            log_message "SSL will be disabled."
+            print_warning "SSL cannot be automatically configured for IP addresses."
+            print_warning "SSL will be disabled."
             log_separator
         fi
         USE_SSL=false
@@ -548,7 +889,13 @@ EOF
         rm -rf "$TEMP_PATH"/* >> "$logsInst" 2>&1
 
         # Installing composer dependencies
-        COMPOSER_ALLOW_SUPERUSER=1 composer install --working-dir="$TORRENTPIER_PATH" >> "$logsInst" 2>&1
+        if [ ! -d "$TORRENTPIER_PATH/vendor" ]; then
+            print_info "Installing composer dependencies..."
+            COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --prefer-dist --optimize-autoloader --working-dir="$TORRENTPIER_PATH" >> "$logsInst" 2>&1 || error_exit "Failed to install composer dependencies"
+            print_success "Composer dependencies installed successfully"
+        else
+            print_info "Vendor directory already exists, skipping composer install"
+        fi
 
         # Setting up the configuration file
         mv "$TORRENTPIER_PATH/.env.example" "$TORRENTPIER_PATH/.env" 2>&1 | tee -a "$logsInst"
@@ -556,6 +903,9 @@ EOF
         sed -i "s/DB_DATABASE=torrentpier/DB_DATABASE=$dbSql/g" "$TORRENTPIER_PATH/.env" >> "$logsInst" 2>&1
         sed -i "s/DB_USERNAME=root/DB_USERNAME=$userSql/g" "$TORRENTPIER_PATH/.env" >> "$logsInst" 2>&1
         sed -i "s/DB_PASSWORD=secret/DB_PASSWORD=$passSql/g" "$TORRENTPIER_PATH/.env" >> "$logsInst" 2>&1
+
+        # Check MariaDB before database operations
+        check_mariadb
 
         # Creating a user
         mysql -e "CREATE USER '$userSql'@'localhost' IDENTIFIED BY '$passSql';" >> "$logsInst" 2>&1
@@ -704,49 +1054,60 @@ EOF
         PROTOCOL="http"
     fi
 
-    echo "" | tee -a "$saveFile"
-    echo "Woah! TorrentPier successfully installed!" | tee -a "$saveFile"
-    echo "" | tee -a "$saveFile"
-    echo "===================================" | tee -a "$saveFile"
-    echo "TorrentPier credentials:" | tee -a "$saveFile"
-    echo "-> $PROTOCOL://$HOST/" | tee -a "$saveFile"
-    echo "-> Username: $torrentPierUser" | tee -a "$saveFile"
-    echo "-> Password: $torrentPierPass" | tee -a "$saveFile"
-    echo "===================================" | tee -a "$saveFile"
-    echo "Database credentials:" | tee -a "$saveFile"
-    echo "-> Database name: $dbSql" | tee -a "$saveFile"
-    echo "-> Username: $userSql" | tee -a "$saveFile"
-    echo "-> Password: $passSql" | tee -a "$saveFile"
-    echo "===================================" | tee -a "$saveFile"
-    echo "phpMyAdmin credentials:" | tee -a "$saveFile"
-    echo "-> $PROTOCOL://$HOST:9090/phpmyadmin" | tee -a "$saveFile"
-    echo "-> Username: $userSql" | tee -a "$saveFile"
-    echo "-> Password: $passSql" | tee -a "$saveFile"
-    echo "===================================" | tee -a "$saveFile"
-    echo "DO NOT USE IT IF YOU DO NOT KNOW WHAT IT IS INTENDED FOR" | tee -a "$saveFile"
-    echo "phpMyAdmin credentials (super admin):" | tee -a "$saveFile"
-    echo "-> $PROTOCOL://$HOST:9090/phpmyadmin" | tee -a "$saveFile"
-    echo "-> Username: phpmyadmin" | tee -a "$saveFile"
-    echo "-> Password: $passPma" | tee -a "$saveFile"
-    echo "===================================" | tee -a "$saveFile"
+    # Perform health check
+    perform_health_check
     
-    # SSL information
-    if [ "$USE_SSL" = true ]; then
-        echo "SSL/TLS Information:" | tee -a "$saveFile"
-        echo "-> SSL is enabled and configured" | tee -a "$saveFile"
-        echo "-> Certificate email: $SSL_EMAIL" | tee -a "$saveFile"
-        if [ "$WEB_SERVER" != "caddy" ]; then
-            echo "-> Auto-renewal: Enabled (daily check at 3 AM)" | tee -a "$saveFile"
-        else
-            echo "-> Auto-renewal: Automatic (Caddy built-in)" | tee -a "$saveFile"
+    # Print beautiful final summary
+    print_final_summary | tee -a "$saveFile"
+    
+    # Save detailed credentials to file (without colors)
+    {
+        echo ""
+        echo "================================================"
+        echo "TorrentPier Installation Details"
+        echo "================================================"
+        echo "Installation Date: $(date '+%Y-%m-%d %H:%M:%S')"
+        echo "Installation Time: $(calculate_time)"
+        echo ""
+        echo "TorrentPier credentials:"
+        echo "-> $PROTOCOL://$HOST/"
+        echo "-> Username: $torrentPierUser"
+        echo "-> Password: $torrentPierPass"
+        echo ""
+        echo "Database credentials:"
+        echo "-> Database name: $dbSql"
+        echo "-> Username: $userSql"
+        echo "-> Password: $passSql"
+        echo ""
+        echo "phpMyAdmin credentials:"
+        echo "-> $PROTOCOL://$HOST:9090/phpmyadmin"
+        echo "-> Username: $userSql"
+        echo "-> Password: $passSql"
+        echo ""
+        echo "DO NOT USE IT IF YOU DO NOT KNOW WHAT IT IS INTENDED FOR"
+        echo "phpMyAdmin credentials (super admin):"
+        echo "-> $PROTOCOL://$HOST:9090/phpmyadmin"
+        echo "-> Username: phpmyadmin"
+        echo "-> Password: $passPma"
+        echo ""
+        if [ "$USE_SSL" = true ]; then
+            echo "SSL/TLS Information:"
+            echo "-> SSL is enabled and configured"
+            echo "-> Certificate email: $SSL_EMAIL"
+            if [ "$WEB_SERVER" != "caddy" ]; then
+                echo "-> Auto-renewal: Enabled (daily check at 3 AM)"
+            else
+                echo "-> Auto-renewal: Automatic (Caddy built-in)"
+            fi
         fi
-        echo "===================================" | tee -a "$saveFile"
-    fi
-    
-    echo "" | tee -a "$saveFile"
-    echo "We are sure that you will be able to create the best tracker available!" | tee -a "$saveFile"
-    echo "Good luck!" | tee -a "$saveFile"
-    echo "" | tee -a "$saveFile"
+        echo ""
+        echo "Configuration:"
+        echo "-> Web Server: $WEB_SERVER"
+        echo "-> PHP Version: $PHP_VERSION"
+        echo "-> TorrentPier Version: $TP_VERSION"
+        echo ""
+        echo "================================================"
+    } >> "$saveFile"
 else
     echo "Your system is not supported." 2>&1 | tee -a "$logsInst"
 fi
