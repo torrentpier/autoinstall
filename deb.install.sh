@@ -187,19 +187,31 @@ if $foundOs; then
     nginx_torrentpier="server {
     listen 80;
     server_name $HOST;
-
     root /var/www/torrentpier;
     index index.php;
-
     charset utf-8;
 
     location / {
         try_files \$uri \$uri/ /index.php?\$args;
     }
 
+    location ~ \/(install|internal_data|library)\/ {
+        return 404;
+    }
+
     location ~ /\.(ht|en) {
         return 404;
     }
+
+    location ~ /\.git {
+        return 404;
+    }
+
+    location ~ \.(.*sql|tpl|db|inc|log|md)$ {
+        return 404;
+    }
+
+    rewrite ^/sitemap.xml$ /sitemap/sitemap.xml;
 
     location ~ \.php$ {
         include fastcgi_params;
@@ -281,15 +293,31 @@ if $foundOs; then
     if [ "$USE_SSL" = true ]; then
         caddy_config="$HOST {
     root * /var/www/torrentpier
-    encode gzip
+    encode gzip zstd
     php_fastcgi unix//run/php/php8.4-fpm.sock
+    try_files {path} {path}/ /index.php?{query}
     file_server
     tls $SSL_EMAIL
+
+    @blocked {
+        path /install/* /internal_data/* /library/*
+        path /.ht* /.en*
+        path /.git/*
+        path *.sql *.tpl *.db *.inc *.log *.md
+    }
+    respond @blocked 404
+
+    redir /sitemap.xml /sitemap/sitemap.xml
+
+    @html_css_js {
+        path *.html *.css *.js *.json *.xml *.txt
+    }
+    header @html_css_js Content-Type \"{mime}; charset=utf-8\"
 }
 
 $HOST:9090 {
     root * /usr/share/phpmyadmin
-    encode gzip
+    encode gzip zstd
     php_fastcgi unix//run/php/php8.4-fpm.sock
     file_server
     tls $SSL_EMAIL
@@ -297,14 +325,30 @@ $HOST:9090 {
     else
         caddy_config="$HOST {
     root * /var/www/torrentpier
-    encode gzip
+    encode gzip zstd
     php_fastcgi unix//run/php/php8.4-fpm.sock
+    try_files {path} {path}/ /index.php?{query}
     file_server
+
+    @blocked {
+        path /install/* /internal_data/* /library/*
+        path /.ht* /.en*
+        path /.git/*
+        path *.sql *.tpl *.db *.inc *.log *.md
+    }
+    respond @blocked 404
+
+    redir /sitemap.xml /sitemap/sitemap.xml
+
+    @html_css_js {
+        path *.html *.css *.js *.json *.xml *.txt
+    }
+    header @html_css_js Content-Type \"{mime}; charset=utf-8\"
 }
 
 $HOST:9090 {
     root * /usr/share/phpmyadmin
-    encode gzip
+    encode gzip zstd
     php_fastcgi unix//run/php/php8.4-fpm.sock
     file_server
 }"

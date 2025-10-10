@@ -134,3 +134,83 @@ After installation, you'll find credentials in:
 /var/log/torrentpier_install.log
 ```
 
+## Web Server Configuration Examples
+
+The repository includes example configurations for all supported web servers in the `examples/` directory:
+
+### NGINX Configuration
+Example file: `examples/nginx.conf`
+
+This configuration includes:
+- Security rules for blocking sensitive directories and files
+- PHP-FPM integration
+- Sitemap redirect
+- UTF-8 charset support
+
+### Apache Configuration
+Example file: `examples/apache.conf`
+
+This configuration includes:
+- PHP-FPM proxy configuration
+- AllowOverride All (enables .htaccess)
+- Logging configuration
+
+**Note:** TorrentPier includes its own `.htaccess` file with all necessary security rules, so the Apache configuration is kept minimal with `AllowOverride All` enabled to allow `.htaccess` to work properly.
+
+### Caddy Configuration
+Example file: `examples/caddy.conf`
+
+This configuration includes:
+- Automatic HTTPS support
+- Gzip and Zstd compression
+- Security matchers for blocking sensitive paths
+- Content-Type headers with UTF-8 charset
+- Sitemap redirect
+
+### Security Features
+
+**NGINX and Caddy** configurations protect:
+- **Sensitive directories:** `/install/`, `/internal_data/`, `/library/`
+- **Hidden files:** `.ht*`, `.en*`, `.git/`
+- **Sensitive file types:** `.sql`, `.tpl`, `.db`, `.inc`, `.log`, `.md`
+
+**Apache** relies on TorrentPier's `.htaccess` file for all security rules.
+
+### Manual Configuration
+
+If you need to manually configure your web server, you can:
+
+1. Copy the example configuration:
+   ```bash
+   # For NGINX
+   cp examples/nginx.conf /etc/nginx/sites-available/torrentpier.conf
+   
+   # For Apache
+   cp examples/apache.conf /etc/apache2/sites-available/torrentpier.conf
+   
+   # For Caddy
+   cp examples/caddy.conf /etc/caddy/Caddyfile
+   ```
+
+2. Edit the configuration:
+   - Replace `example.com` with your domain or IP
+   - Replace `/path/to/www` with `/var/www/torrentpier`
+   - Replace `/run/php/php-fpm.sock` with `/run/php/php8.4-fpm.sock`
+
+3. Enable and restart the web server:
+   ```bash
+   # For NGINX
+   ln -s /etc/nginx/sites-available/torrentpier.conf /etc/nginx/sites-enabled/
+   nginx -t
+   systemctl restart nginx
+   
+   # For Apache
+   a2ensite torrentpier
+   apache2ctl configtest
+   systemctl restart apache2
+   
+   # For Caddy
+   caddy validate --config /etc/caddy/Caddyfile
+   systemctl reload caddy
+   ```
+
