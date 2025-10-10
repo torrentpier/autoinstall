@@ -90,6 +90,32 @@ chmod +x ./autoinstall/deb.install.sh && ./autoinstall/deb.install.sh --webserve
 - ✅ **Beautiful final summary** - Structured output with all credentials and next steps
 - ✅ **Post-installation health check** - Validates all services, database, website accessibility
 
+### Recent Improvements (2024-10-10):
+- ✅ **Fixed silent script exit** - Script now properly reports errors during package installation
+- ✅ **Progress tracking** - Shows progress for each package installation (e.g., [2/15] Installing package...)
+- ✅ **System diagnostics** - Outputs system information (OS, kernel, architecture) at startup
+- ✅ **Repository validation** - Checks package availability before installation
+- ✅ **Enhanced logging** - Detailed APT error logging for better troubleshooting
+- ✅ **Automatic error recovery** - Attempts to fix broken packages and retry installation
+- ✅ **Better PHP-FPM handling** - Improved error handling and status reporting for PHP-FPM
+
+### Troubleshooting:
+If you encounter any issues during installation:
+
+1. **Check the installation log:**
+   ```bash
+   tail -100 /var/log/torrentpier_install.log
+   ```
+
+2. **Common issues:**
+   - Package installation fails → Log will show detailed APT errors
+   - PHP-FPM won't start → Check `sudo systemctl status php8.4-fpm`
+   - Ports occupied → Use `sudo ss -tulpn | grep ':80\|:443\|:9090'`
+
+3. **See the complete troubleshooting guide:** [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+
+4. **View changelog:** [CHANGELOG.md](CHANGELOG.md)
+
 ### Post-Installation Health Check:
 After installation completes, an automatic health check validates:
 - 🌐 Web server status (nginx/apache/caddy)

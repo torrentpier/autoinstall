@@ -171,6 +171,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Print system information for diagnostics
+print_system_info() {
+    log_separator
+    print_info "System Information:"
+    log_separator
+    echo "OS: $(grep ^PRETTY_NAME= /etc/os-release | awk -F= '{print $2}' | tr -d '\"')" | tee -a "$logsInst"
+    echo "Kernel: $(uname -r)" | tee -a "$logsInst"
+    echo "Architecture: $(dpkg --print-architecture)" | tee -a "$logsInst"
+    echo "Date: $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$logsInst"
+    log_separator
+    echo ""
+}
+
 # Logging function (default to info)
 log_message() {
     print_info "$1"
@@ -441,6 +454,9 @@ for os in "${suppOs[@]}"; do
 done
 
 if $foundOs; then
+    # Print system information for diagnostics
+    print_system_info
+    
     # Run system requirements checks
     print_info "Running system requirements checks..."
     check_ram
@@ -788,6 +804,10 @@ $HOST:9090 {
     fi
     
     apt-get -y update >> "$logsInst" 2>&1
+    
+    # Log available PHP packages for diagnostics
+    echo "Available PHP $PHP_VERSION packages:" >> "$logsInst"
+    apt-cache search "php$PHP_VERSION" | grep "^php$PHP_VERSION" | head -20 >> "$logsInst" 2>&1 || true
 
     # Check and installation sudo
     if ! dpkg-query -W -f='${Status}' "sudo" 2>/dev/null | grep -q "install ok installed"; then
@@ -812,13 +832,30 @@ $HOST:9090 {
     # Temporarily disable error trap for package installation
     trap - ERR
     
+    # Calculate total packages for progress tracking
+    total_packages=${#pkgsList[@]}
+    current_package=0
+    
     # Package installation cycle
     for package in "${pkgsList[@]}"; do
+        ((current_package++))
         # Checking for packages and installing packages
         if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
             log_separator
-            log_message "$package not installed. Installation in progress..."
+            print_info "[$current_package/$total_packages] Installing $package..."
             log_separator
+            
+            # Check if package is available in repositories
+            if ! apt-cache show "$package" &>/dev/null; then
+                print_warning "Package $package is not available in repositories"
+                print_info "Updating package cache and retrying..."
+                apt-get update >> "$logsInst" 2>&1 || true
+                
+                if ! apt-cache show "$package" &>/dev/null; then
+                    trap 'error_exit "An error occurred on line $LINENO"' ERR
+                    error_exit "Package $package is not available in repositories. Check PHP repository configuration."
+                fi
+            fi
             
             # Special handling for PHP-FPM to avoid startup failures during installation
             if [[ "$package" == php*-fpm ]]; then
@@ -832,12 +869,47 @@ $HOST:9090 {
                     
                     # Verify installation succeeded
                     if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
-                        print_error "Failed to install $package"
+                        trap 'error_exit "An error occurred on line $LINENO"' ERR
+                        error_exit "Failed to install $package. Check log file: $logsInst"
                     fi
                 }
             else
-                apt-get install -y "$package" >> "$logsInst" 2>&1
+                # Install package and check if it succeeded
+                if ! DEBIAN_FRONTEND=noninteractive apt-get install -y "$package" >> "$logsInst" 2>&1; then
+                    print_warning "Installation of $package failed, attempting to fix..."
+                    echo "=== APT Error for $package ===" >> "$logsInst"
+                    DEBIAN_FRONTEND=noninteractive apt-get install -y "$package" 2>&1 | tail -50 >> "$logsInst" || true
+                    echo "=== End of APT Error ===" >> "$logsInst"
+                    
+                    # Try to fix broken packages
+                    dpkg --configure -a >> "$logsInst" 2>&1 || true
+                    apt-get install -y -f >> "$logsInst" 2>&1 || true
+                    
+                    # Retry installation
+                    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y "$package" >> "$logsInst" 2>&1; then
+                        # Verify if package is actually installed despite error
+                        if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
+                            echo "=== Final APT Error for $package ===" >> "$logsInst"
+                            DEBIAN_FRONTEND=noninteractive apt-get install -y "$package" 2>&1 | tail -100 >> "$logsInst" || true
+                            echo "=== End of Final APT Error ===" >> "$logsInst"
+                            trap 'error_exit "An error occurred on line $LINENO"' ERR
+                            error_exit "Failed to install $package after retry. Check log file: $logsInst"
+                        else
+                            print_warning "$package installed but with warnings"
+                        fi
+                    fi
+                fi
             fi
+            
+            # Final verification that package was installed successfully
+            if dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
+                print_success "[$current_package/$total_packages] $package installed successfully"
+            else
+                trap 'error_exit "An error occurred on line $LINENO"' ERR
+                error_exit "Package $package failed to install. Check log file: $logsInst"
+            fi
+        else
+            print_info "[$current_package/$total_packages] $package is already installed"
         fi
     done
     
@@ -867,25 +939,37 @@ $HOST:9090 {
         # Try to start PHP-FPM
         if ! systemctl is-active --quiet "php$PHP_VERSION-fpm" 2>/dev/null; then
             print_info "PHP-FPM is not running, attempting to start..."
-            systemctl start "php$PHP_VERSION-fpm" 2>/dev/null || {
+            
+            if systemctl start "php$PHP_VERSION-fpm" 2>/dev/null; then
+                print_success "PHP-FPM started successfully"
+            else
                 print_warning "Failed to start PHP-FPM via systemctl, trying alternative method..."
                 # Try to fix configuration issues
                 dpkg --configure -a >> "$logsInst" 2>&1 || true
                 # Force reinstall if needed
                 apt-get install --reinstall -y "php$PHP_VERSION-fpm" >> "$logsInst" 2>&1 || true
                 # Try to start again
-                systemctl start "php$PHP_VERSION-fpm" 2>/dev/null || print_warning "PHP-FPM may need manual configuration"
-            }
+                if systemctl start "php$PHP_VERSION-fpm" 2>/dev/null; then
+                    print_success "PHP-FPM started successfully after reinstall"
+                else
+                    print_warning "PHP-FPM may need manual configuration. Continuing installation..."
+                fi
+            fi
+        else
+            print_success "PHP-FPM is already running"
         fi
         
         # Enable PHP-FPM on boot
         systemctl enable "php$PHP_VERSION-fpm" 2>/dev/null || true
         
         if systemctl is-active --quiet "php$PHP_VERSION-fpm" 2>/dev/null; then
-            print_success "PHP-FPM is running"
+            print_success "PHP-FPM service is active and enabled"
         else
             print_warning "PHP-FPM installation completed but service is not running. Will continue installation..."
         fi
+    else
+        trap 'error_exit "An error occurred on line $LINENO"' ERR
+        error_exit "PHP $PHP_VERSION-FPM is not installed. Installation failed."
     fi
     
     # Re-enable error trap
