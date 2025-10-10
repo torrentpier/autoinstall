@@ -209,7 +209,12 @@ perform_health_check() {
     
     # Check web server
     echo -n "🌐 Checking web server ($WEB_SERVER)... "
-    if systemctl is-active --quiet "$WEB_SERVER" 2>/dev/null; then
+    local webserver_service="$WEB_SERVER"
+    # Apache service is called apache2 on Debian/Ubuntu
+    if [ "$WEB_SERVER" = "apache" ]; then
+        webserver_service="apache2"
+    fi
+    if systemctl is-active --quiet "$webserver_service" 2>/dev/null; then
         echo -e "${GREEN}✓ Running${NC}"
     else
         echo -e "${RED}✗ Not running${NC}"
@@ -244,7 +249,7 @@ perform_health_check() {
     
     # Check phpMyAdmin
     echo -n "💾 Checking phpMyAdmin... "
-    if curl -sf -o /dev/null -m 10 "$PROTOCOL://$HOST:9090/phpmyadmin/" 2>/dev/null; then
+    if curl -sf -o /dev/null -m 10 "$PROTOCOL://$HOST:9090/" 2>/dev/null; then
         echo -e "${GREEN}✓ Accessible${NC}"
     else
         echo -e "${YELLOW}⚠ Not accessible${NC}"
@@ -325,7 +330,7 @@ print_final_summary() {
     echo ""
     echo -e "${YELLOW}🌐 Access Information:${NC}"
     echo -e "   ${GREEN}➜${NC} TorrentPier URL:    ${BLUE}$PROTOCOL://$HOST/${NC}"
-    echo -e "   ${GREEN}➜${NC} phpMyAdmin URL:     ${BLUE}$PROTOCOL://$HOST:9090/phpmyadmin${NC}"
+    echo -e "   ${GREEN}➜${NC} phpMyAdmin URL:     ${BLUE}$PROTOCOL://$HOST:9090/${NC}"
     echo ""
     echo -e "${YELLOW}🔐 TorrentPier Credentials:${NC}"
     echo -e "   ${GREEN}➜${NC} Username:  ${BLUE}$torrentPierUser${NC}"
@@ -1022,7 +1027,15 @@ EOF
         find "$TORRENTPIER_PATH" -type d -exec chmod 755 {} \; >> "$logsInst" 2>&1
 
         # Setting the CRON task
-        { (crontab -l 2>/dev/null; echo "*/10 * * * * sudo -u www-data php $TORRENTPIER_PATH/cron.php") | crontab -; } >> "$logsInst" 2>&1
+        log_separator
+        print_info "Setting up CRON task for TorrentPier..."
+        log_separator
+        if ! crontab -l 2>/dev/null | grep -q "$TORRENTPIER_PATH/cron.php"; then
+            (crontab -l 2>/dev/null; echo "*/10 * * * * sudo -u www-data php $TORRENTPIER_PATH/cron.php") | crontab - >> "$logsInst" 2>&1
+            print_success "CRON task configured successfully"
+        else
+            print_info "CRON task already configured"
+        fi
     else
         log_separator
         echo "TorrentPier is already installed on the system. The installation cannot continue." | tee -a "$logsInst"
@@ -1171,13 +1184,13 @@ EOF
         echo "-> Password: $passSql"
         echo ""
         echo "phpMyAdmin credentials:"
-        echo "-> $PROTOCOL://$HOST:9090/phpmyadmin"
+        echo "-> $PROTOCOL://$HOST:9090/"
         echo "-> Username: $userSql"
         echo "-> Password: $passSql"
         echo ""
         echo "DO NOT USE IT IF YOU DO NOT KNOW WHAT IT IS INTENDED FOR"
         echo "phpMyAdmin credentials (super admin):"
-        echo "-> $PROTOCOL://$HOST:9090/phpmyadmin"
+        echo "-> $PROTOCOL://$HOST:9090/"
         echo "-> Username: phpmyadmin"
         echo "-> Password: $passPma"
         echo ""
