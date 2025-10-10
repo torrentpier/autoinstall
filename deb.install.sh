@@ -15,6 +15,8 @@ clear
 # Default values
 WEB_SERVER="nginx"
 TP_VERSION="v2.4"
+SSL_ENABLE="auto"
+SSL_EMAIL=""
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -27,12 +29,22 @@ while [[ $# -gt 0 ]]; do
             TP_VERSION="$2"
             shift 2
             ;;
+        --ssl)
+            SSL_ENABLE="$2"
+            shift 2
+            ;;
+        --email)
+            SSL_EMAIL="$2"
+            shift 2
+            ;;
         --help)
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
             echo "  --webserver <nginx|apache|caddy>  Choose web server (default: nginx)"
             echo "  --version <v2.4|v2.8>              Choose TorrentPier version (default: v2.4)"
+            echo "  --ssl <auto|yes|no>                Enable SSL/TLS (default: auto - only for domains)"
+            echo "  --email <email@example.com>        Email for SSL certificate (required if domain is used)"
             echo "  --help                             Show this help message"
             echo ""
             exit 0
@@ -54,6 +66,12 @@ fi
 # Validate version choice
 if [[ ! "$TP_VERSION" =~ ^(v2\.4|v2\.8)$ ]]; then
     echo "Error: Invalid version. Choose: v2.4 or v2.8"
+    exit 1
+fi
+
+# Validate SSL choice
+if [[ ! "$SSL_ENABLE" =~ ^(auto|yes|no)$ ]]; then
+    echo "Error: Invalid SSL option. Choose: auto, yes, or no"
     exit 1
 fi
 
@@ -128,6 +146,42 @@ if $foundOs; then
             echo "You have not entered a domain name or IP address. Please try again."
         fi
     done
+
+    # Determine if SSL should be enabled
+    USE_SSL=false
+    if is_domain "$HOST"; then
+        # It's a domain, check SSL settings
+        if [ "$SSL_ENABLE" = "auto" ] || [ "$SSL_ENABLE" = "yes" ]; then
+            USE_SSL=true
+            
+            # Request email if not provided
+            if [ -z "$SSL_EMAIL" ]; then
+                while true; do
+                    echo "Enter your email for SSL certificate (Let's Encrypt):"
+                    read -r SSL_EMAIL
+                    if [[ "$SSL_EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+                        break
+                    else
+                        echo "Incorrect email format. Please try again."
+                    fi
+                done
+            fi
+            
+            echo "===================================" 2>&1 | tee -a "$logsInst"
+            echo "SSL will be automatically configured for domain: $HOST" | tee -a "$logsInst"
+            echo "Email for certificates: $SSL_EMAIL" | tee -a "$logsInst"
+            echo "===================================" 2>&1 | tee -a "$logsInst"
+        fi
+    else
+        # It's an IP address
+        if [ "$SSL_ENABLE" = "yes" ]; then
+            echo "===================================" 2>&1 | tee -a "$logsInst"
+            echo "Warning: SSL cannot be automatically configured for IP addresses." | tee -a "$logsInst"
+            echo "SSL will be disabled." | tee -a "$logsInst"
+            echo "===================================" 2>&1 | tee -a "$logsInst"
+        fi
+        USE_SSL=false
+    fi
 
     # NGINX configuration file for TorrentPier
     nginx_torrentpier="server {
@@ -223,8 +277,25 @@ if $foundOs; then
     CustomLog \${APACHE_LOG_DIR}/phpmyadmin_access.log combined
 </VirtualHost>"
 
-    # Caddy configuration file
-    caddy_config="$HOST {
+    # Caddy configuration file (SSL automatic if domain is used)
+    if [ "$USE_SSL" = true ]; then
+        caddy_config="$HOST {
+    root * /var/www/torrentpier
+    encode gzip
+    php_fastcgi unix//run/php/php8.4-fpm.sock
+    file_server
+    tls $SSL_EMAIL
+}
+
+$HOST:9090 {
+    root * /usr/share/phpmyadmin
+    encode gzip
+    php_fastcgi unix//run/php/php8.4-fpm.sock
+    file_server
+    tls $SSL_EMAIL
+}"
+    else
+        caddy_config="$HOST {
     root * /var/www/torrentpier
     encode gzip
     php_fastcgi unix//run/php/php8.4-fpm.sock
@@ -237,6 +308,7 @@ $HOST:9090 {
     php_fastcgi unix//run/php/php8.4-fpm.sock
     file_server
 }"
+    fi
 
     # Packages for installation, TorrentPier, phpMyAdmin
     # Base packages (PHP 8.4)
@@ -246,12 +318,19 @@ $HOST:9090 {
     case "$WEB_SERVER" in
         nginx)
             pkgsList+=("nginx")
+            if [ "$USE_SSL" = true ]; then
+                pkgsList+=("certbot" "python3-certbot-nginx")
+            fi
             ;;
         apache)
             pkgsList+=("apache2" "libapache2-mod-fcgid")
+            if [ "$USE_SSL" = true ]; then
+                pkgsList+=("certbot" "python3-certbot-apache")
+            fi
             ;;
         caddy)
             pkgsList+=("debian-keyring" "debian-archive-keyring" "apt-transport-https")
+            # Caddy has built-in automatic HTTPS, no need for certbot
             ;;
     esac
 
@@ -441,6 +520,19 @@ EOF
                 # We are testing and running the NGINX config
                 sudo nginx -t 2>&1 | sudo tee -a "$logsInst" > /dev/null
                 sudo systemctl restart nginx 2>&1 | sudo tee -a "$logsInst" > /dev/null
+
+                # Setup SSL if enabled
+                if [ "$USE_SSL" = true ]; then
+                    echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                    echo "Obtaining SSL certificate for NGINX..." | sudo tee -a "$logsInst"
+                    echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                    sudo certbot --nginx -d "$HOST" --non-interactive --agree-tos --email "$SSL_EMAIL" --redirect 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                    
+                    # Setup auto-renewal
+                    if ! sudo crontab -l 2>/dev/null | grep -q "certbot renew"; then
+                        (sudo crontab -l 2>/dev/null; echo "0 3 * * * certbot renew --quiet --post-hook 'systemctl reload nginx'") | sudo crontab - 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                    fi
+                fi
             else
                 echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
                 echo "NGINX is not installed. The installation cannot continue." | sudo tee -a "$logsInst"
@@ -455,7 +547,7 @@ EOF
                 echo "Apache is not configured. The setup in progress..." | sudo tee -a "$logsInst"
                 echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
                 # Enable required modules
-                sudo a2enmod proxy_fcgi setenvif rewrite 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                sudo a2enmod proxy_fcgi setenvif rewrite ssl 2>&1 | sudo tee -a "$logsInst" > /dev/null
                 sudo a2enconf php8.4-fpm 2>&1 | sudo tee -a "$logsInst" > /dev/null
                 
                 # Create port 9090 configuration for Apache
@@ -471,6 +563,19 @@ EOF
                 # We are testing and running the Apache config
                 sudo apache2ctl configtest 2>&1 | sudo tee -a "$logsInst" > /dev/null
                 sudo systemctl restart apache2 2>&1 | sudo tee -a "$logsInst" > /dev/null
+
+                # Setup SSL if enabled
+                if [ "$USE_SSL" = true ]; then
+                    echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                    echo "Obtaining SSL certificate for Apache..." | sudo tee -a "$logsInst"
+                    echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                    sudo certbot --apache -d "$HOST" --non-interactive --agree-tos --email "$SSL_EMAIL" --redirect 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                    
+                    # Setup auto-renewal
+                    if ! sudo crontab -l 2>/dev/null | grep -q "certbot renew"; then
+                        (sudo crontab -l 2>/dev/null; echo "0 3 * * * certbot renew --quiet --post-hook 'systemctl reload apache2'") | sudo crontab - 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                    fi
+                fi
             else
                 echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
                 echo "Apache is not installed. The installation cannot continue." | sudo tee -a "$logsInst"
@@ -489,6 +594,14 @@ EOF
 
                 # Reload Caddy config
                 sudo systemctl reload caddy 2>&1 | sudo tee -a "$logsInst" > /dev/null
+
+                # Inform about automatic SSL
+                if [ "$USE_SSL" = true ]; then
+                    echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                    echo "Caddy will automatically obtain SSL certificate for: $HOST" | sudo tee -a "$logsInst"
+                    echo "This may take a few moments on first access..." | sudo tee -a "$logsInst"
+                    echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+                fi
             else
                 echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
                 echo "Caddy is not installed. The installation cannot continue." | sudo tee -a "$logsInst"
@@ -499,12 +612,19 @@ EOF
             ;;
     esac
 
+    # Determine protocol
+    if [ "$USE_SSL" = true ]; then
+        PROTOCOL="https"
+    else
+        PROTOCOL="http"
+    fi
+
     echo "" | sudo tee -a "$saveFile"
     echo "Woah! TorrentPier successfully installed!" | sudo tee -a "$saveFile"
     echo "" | sudo tee -a "$saveFile"
     echo "===================================" | sudo tee -a "$saveFile"
     echo "TorrentPier credentials:" | sudo tee -a "$saveFile"
-    echo "-> http://$HOST/" | sudo tee -a "$saveFile"
+    echo "-> $PROTOCOL://$HOST/" | sudo tee -a "$saveFile"
     echo "-> Username: $torrentPierUser" | sudo tee -a "$saveFile"
     echo "-> Password: $torrentPierPass" | sudo tee -a "$saveFile"
     echo "===================================" | sudo tee -a "$saveFile"
@@ -514,16 +634,30 @@ EOF
     echo "-> Password: $passSql" | sudo tee -a "$saveFile"
     echo "===================================" | sudo tee -a "$saveFile"
     echo "phpMyAdmin credentials:" | sudo tee -a "$saveFile"
-    echo "-> http://$HOST:9090/phpmyadmin" | sudo tee -a "$saveFile"
+    echo "-> $PROTOCOL://$HOST:9090/phpmyadmin" | sudo tee -a "$saveFile"
     echo "-> Username: $userSql" | sudo tee -a "$saveFile"
     echo "-> Password: $passSql" | sudo tee -a "$saveFile"
     echo "===================================" | sudo tee -a "$saveFile"
     echo "DO NOT USE IT IF YOU DO NOT KNOW WHAT IT IS INTENDED FOR" | sudo tee -a "$saveFile" > /dev/null
     echo "phpMyAdmin credentials (super admin):" | sudo tee -a "$saveFile" > /dev/null
-    echo "-> http://$HOST:9090/phpmyadmin" | sudo tee -a "$saveFile" > /dev/null
+    echo "-> $PROTOCOL://$HOST:9090/phpmyadmin" | sudo tee -a "$saveFile" > /dev/null
     echo "-> Username: phpmyadmin" | sudo tee -a "$saveFile" > /dev/null
     echo "-> Password: $passPma" | sudo tee -a "$saveFile" > /dev/null
     echo "===================================" | sudo tee -a "$saveFile" > /dev/null
+    
+    # SSL information
+    if [ "$USE_SSL" = true ]; then
+        echo "SSL/TLS Information:" | sudo tee -a "$saveFile"
+        echo "-> SSL is enabled and configured" | sudo tee -a "$saveFile"
+        echo "-> Certificate email: $SSL_EMAIL" | sudo tee -a "$saveFile"
+        if [ "$WEB_SERVER" != "caddy" ]; then
+            echo "-> Auto-renewal: Enabled (daily check at 3 AM)" | sudo tee -a "$saveFile"
+        else
+            echo "-> Auto-renewal: Automatic (Caddy built-in)" | sudo tee -a "$saveFile"
+        fi
+        echo "===================================" | sudo tee -a "$saveFile"
+    fi
+    
     echo "" | sudo tee -a $saveFile
     echo "We are sure that you will be able to create the best tracker available!" | sudo tee -a $saveFile
     echo "Good luck!" | sudo tee -a $saveFile
