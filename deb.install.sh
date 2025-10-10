@@ -964,6 +964,10 @@ EOF
         [ -f "$TEMP_PATH/torrentpier.zip" ] || error_exit "TorrentPier archive not found after download"
         
         unzip -o "$TEMP_PATH/torrentpier.zip" -d "$TEMP_PATH" >> "$logsInst" 2>&1 || error_exit "Failed to extract TorrentPier archive"
+        
+        # Create parent directory if it doesn't exist
+        mkdir -p "$(dirname "$TORRENTPIER_PATH")" >> "$logsInst" 2>&1 || error_exit "Failed to create parent directory for TorrentPier"
+        
         mv "$TEMP_PATH"/torrentpier-torrentpier-* "$TORRENTPIER_PATH" >> "$logsInst" 2>&1 || error_exit "Failed to move TorrentPier files"
 
         # Clearing the temporary folder
