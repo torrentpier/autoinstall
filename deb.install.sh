@@ -536,7 +536,7 @@ if $foundOs; then
                     echo "Enter your email for SSL certificate (Let's Encrypt):"
                     read -r SSL_EMAIL
                     # Improved email validation (RFC 5322 simplified)
-                    if [[ "$SSL_EMAIL" =~ ^[a-zA-Z0-9._%+'-]+@[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$ ]]; then
+                    if [[ "$SSL_EMAIL" =~ ^[a-zA-Z0-9._%+\'-]+@[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$ ]]; then
                         break
                     else
                         echo "Incorrect email format. Please try again."

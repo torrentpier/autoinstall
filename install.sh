@@ -38,7 +38,7 @@ done
 # Downloading and running the installation file
 if $foundOs; then
     # Required packages
-    pkgsList=("jq" "curl" "zip" "unzip")
+    pkgsList=("curl")
 
     # Updating tables and packages
     echo "===================================" 2>&1 | tee -a "$logsInst" > /dev/null
@@ -66,27 +66,36 @@ if $foundOs; then
         fi
     done
 
-    # Preparing a temporary catalog
-    echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-    echo "Preparing a temporary catalog" | tee -a "$logsInst"
-    echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-    sudo mkdir -p "$TEMP_PATH" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-    sudo rm -rf "$TEMP_PATH"/* 2>&1 | sudo tee -a "$logsInst" > /dev/null
+    # Get the directory where install.sh is located
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    INSTALL_SCRIPT="$SCRIPT_DIR/deb.install.sh"
 
-    # Downloading the installation script
-    echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-    echo "Downloading the installation script" | tee -a "$logsInst"
-    echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-    curl -s https://api.github.com/repos/torrentpier/autoinstall/releases | jq -r 'map(select(.prerelease == true)) | .[0].zipball_url' | xargs -n 1 curl -L -o "$TEMP_PATH/autoinstall.zip" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-    sudo unzip -o "$TEMP_PATH/autoinstall.zip" -d "$TEMP_PATH" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-    sudo mv "$TEMP_PATH"/*autoinstall-* "$TEMP_PATH/autoinstall" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+    # Check if deb.install.sh exists in the current directory
+    if [ -f "$INSTALL_SCRIPT" ]; then
+        echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+        echo "Using local installation script" | tee -a "$logsInst"
+        echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+    else
+        # Preparing a temporary catalog
+        echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+        echo "Preparing a temporary catalog" | tee -a "$logsInst"
+        echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+        sudo mkdir -p "$TEMP_PATH" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+        
+        # Downloading the installation script
+        echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+        echo "Downloading the installation script" | tee -a "$logsInst"
+        echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+        sudo curl -fsSL https://raw.githubusercontent.com/torrentpier/autoinstall/main/deb.install.sh -o "$TEMP_PATH/deb.install.sh" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+        INSTALL_SCRIPT="$TEMP_PATH/deb.install.sh"
+    fi
 
     # Starting the automatic installation
     echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
     echo "Starting the automatic installation" | tee -a "$logsInst"
     echo "===================================" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-    sudo chmod +x "$TEMP_PATH/autoinstall/deb.install.sh" 2>&1 | sudo tee -a "$logsInst" > /dev/null
-    sudo "$TEMP_PATH/autoinstall/deb.install.sh" "$@"
+    sudo chmod +x "$INSTALL_SCRIPT" 2>&1 | sudo tee -a "$logsInst" > /dev/null
+    sudo "$INSTALL_SCRIPT" "$@"
 else
     echo "Your system is not supported." 2>&1 | tee -a "$logsInst"
 fi
