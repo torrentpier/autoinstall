@@ -804,6 +804,9 @@ $HOST:9090 {
         fi
     fi
 
+    # Temporarily disable error trap for package installation
+    trap - ERR
+    
     # Package installation cycle
     for package in "${pkgsList[@]}"; do
         # Checking for packages and installing packages
@@ -811,9 +814,30 @@ $HOST:9090 {
             log_separator
             log_message "$package not installed. Installation in progress..."
             log_separator
-            apt-get install -y "$package" >> "$logsInst" 2>&1
+            
+            # Special handling for PHP-FPM to avoid startup failures during installation
+            if [[ "$package" == php*-fpm ]]; then
+                # Install without starting the service
+                DEBIAN_FRONTEND=noninteractive apt-get install -y "$package" >> "$logsInst" 2>&1 || {
+                    # If installation fails, try to fix it
+                    print_warning "PHP-FPM installation encountered issues, attempting to fix..."
+                    dpkg --configure -a >> "$logsInst" 2>&1 || true
+                    systemctl stop "php$PHP_VERSION-fpm" 2>/dev/null || true
+                    apt-get install -y -f >> "$logsInst" 2>&1 || true
+                    
+                    # Verify installation succeeded
+                    if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
+                        print_error "Failed to install $package"
+                    fi
+                }
+            else
+                apt-get install -y "$package" >> "$logsInst" 2>&1
+            fi
         fi
     done
+    
+    # Re-enable error trap
+    trap 'error_exit "An error occurred on line $LINENO"' ERR
     
     # Install Caddy separately
     if [ "$WEB_SERVER" == "caddy" ]; then
@@ -824,6 +848,43 @@ $HOST:9090 {
             apt-get install -y caddy >> "$logsInst" 2>&1
         fi
     fi
+
+    # Fix and start PHP-FPM if needed
+    log_separator
+    log_message "Configuring PHP $PHP_VERSION-FPM..."
+    log_separator
+    
+    # Temporarily disable error trap
+    trap - ERR
+    
+    # Check if PHP-FPM is installed
+    if dpkg-query -W -f='${Status}' "php$PHP_VERSION-fpm" 2>/dev/null | grep -q "install ok installed"; then
+        # Try to start PHP-FPM
+        if ! systemctl is-active --quiet "php$PHP_VERSION-fpm" 2>/dev/null; then
+            print_info "PHP-FPM is not running, attempting to start..."
+            systemctl start "php$PHP_VERSION-fpm" 2>/dev/null || {
+                print_warning "Failed to start PHP-FPM via systemctl, trying alternative method..."
+                # Try to fix configuration issues
+                dpkg --configure -a >> "$logsInst" 2>&1 || true
+                # Force reinstall if needed
+                apt-get install --reinstall -y "php$PHP_VERSION-fpm" >> "$logsInst" 2>&1 || true
+                # Try to start again
+                systemctl start "php$PHP_VERSION-fpm" 2>/dev/null || print_warning "PHP-FPM may need manual configuration"
+            }
+        fi
+        
+        # Enable PHP-FPM on boot
+        systemctl enable "php$PHP_VERSION-fpm" 2>/dev/null || true
+        
+        if systemctl is-active --quiet "php$PHP_VERSION-fpm" 2>/dev/null; then
+            print_success "PHP-FPM is running"
+        else
+            print_warning "PHP-FPM installation completed but service is not running. Will continue installation..."
+        fi
+    fi
+    
+    # Re-enable error trap
+    trap 'error_exit "An error occurred on line $LINENO"' ERR
 
     passPma="$(pwgen -1Bs 12)"
     dbSql="torrentpier_$(pwgen -1 8)"
