@@ -284,12 +284,20 @@ perform_health_check() {
         all_ok=false
     fi
 
-    # Check cron job
-    echo -n "[Cron] Checking cron job... "
+    # Check cron service and job
+    echo -n "[Cron Service] Checking cron daemon... "
+    if systemctl is-active --quiet cron 2>/dev/null || systemctl is-active --quiet crond 2>/dev/null; then
+        echo -e "${GREEN}OK${NC}"
+    else
+        echo -e "${RED}FAIL${NC}"
+        all_ok=false
+    fi
+    
+    echo -n "[Cron Job] Checking cron task... "
     if crontab -l 2>/dev/null | grep -q "$TORRENTPIER_PATH/cron.php"; then
         echo -e "${GREEN}OK${NC}"
     else
-        echo -e "${YELLOW}WARNING${NC}"
+        echo -e "${YELLOW}WARNING (task not found in crontab)${NC}"
     fi
 
     # Check file permissions
@@ -1055,6 +1063,13 @@ EOF
         chown -R www-data:www-data "$TORRENTPIER_PATH" >> "$logsInst" 2>&1
         find "$TORRENTPIER_PATH" -type f -exec chmod 644 {} \; >> "$logsInst" 2>&1
         find "$TORRENTPIER_PATH" -type d -exec chmod 755 {} \; >> "$logsInst" 2>&1
+
+        # Enable and start cron service
+        print_info "Enabling and starting cron service..."
+        systemctl enable cron >> "$logsInst" 2>&1 || systemctl enable crond >> "$logsInst" 2>&1 || true
+        if ! systemctl is-active --quiet cron 2>/dev/null && ! systemctl is-active --quiet crond 2>/dev/null; then
+            systemctl start cron >> "$logsInst" 2>&1 || systemctl start crond >> "$logsInst" 2>&1 || print_warning "Could not start cron service"
+        fi
 
         # Setting the CRON task
         print_info "Setting up CRON task for TorrentPier..."
