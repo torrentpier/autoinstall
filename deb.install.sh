@@ -184,11 +184,6 @@ print_system_info() {
     echo ""
 }
 
-# Logging function (default to info)
-log_message() {
-    print_info "$1"
-}
-
 log_separator() {
     echo -e "${BLUE}===================================${NC}" | tee -a "$logsInst"
 }
@@ -785,14 +780,14 @@ http://$HOST:9090 {
 
     # Updating tables and packages
     log_separator
-    log_message "Updating tables and packages"
+    print_info "Updating tables and packages"
     log_separator
     apt-get -y update >> "$logsInst" 2>&1
     apt-get -y dist-upgrade >> "$logsInst" 2>&1
 
     # Add PHP repository
     log_separator
-    log_message "Adding PHP $PHP_VERSION repository"
+    print_info "Adding PHP $PHP_VERSION repository"
     log_separator
     apt-get install -y lsb-release ca-certificates apt-transport-https software-properties-common >> "$logsInst" 2>&1
     
@@ -813,7 +808,7 @@ http://$HOST:9090 {
     # Check and installation sudo
     if ! dpkg-query -W -f='${Status}' "sudo" 2>/dev/null | grep -q "install ok installed"; then
         log_separator
-        log_message "sudo not installed. Installation in progress..."
+        print_info "sudo not installed. Installation in progress..."
         log_separator
         apt-get install -y sudo >> "$logsInst" 2>&1
     fi
@@ -822,7 +817,7 @@ http://$HOST:9090 {
     if [ "$WEB_SERVER" == "caddy" ]; then
         if ! dpkg-query -W -f='${Status}' "caddy" 2>/dev/null | grep -q "install ok installed"; then
             log_separator
-            log_message "Adding Caddy repository..."
+            print_info "Adding Caddy repository..."
             log_separator
             curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg >> "$logsInst" 2>&1
             curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list >> "$logsInst" 2>&1
@@ -921,7 +916,7 @@ http://$HOST:9090 {
     if [ "$WEB_SERVER" == "caddy" ]; then
         if ! dpkg-query -W -f='${Status}' "caddy" 2>/dev/null | grep -q "install ok installed"; then
             log_separator
-            log_message "caddy not installed. Installation in progress..."
+            print_info "caddy not installed. Installation in progress..."
             log_separator
             apt-get install -y caddy >> "$logsInst" 2>&1
         fi
@@ -929,7 +924,7 @@ http://$HOST:9090 {
 
     # Fix and start PHP-FPM if needed
     log_separator
-    log_message "Configuring PHP $PHP_VERSION-FPM..."
+    print_info "Configuring PHP $PHP_VERSION-FPM..."
     log_separator
     
     # Temporarily disable error trap
@@ -984,7 +979,7 @@ http://$HOST:9090 {
     # Installation phpMyAdmin
     if ! dpkg-query -W -f='${Status}' "phpmyadmin" 2>/dev/null | grep -q "install ok installed"; then
         log_separator
-        log_message "phpMyAdmin not installed. Installation in progress..."
+        print_info "phpMyAdmin not installed. Installation in progress..."
         log_separator
 
         debconf-set-selections <<EOF
@@ -1025,7 +1020,7 @@ EOF
     # Installation and setting Composer
     if [ ! -f "/usr/local/bin/composer" ]; then
         log_separator
-        log_message "Composer not installed. Installation in progress..."
+        print_info "Composer not installed. Installation in progress..."
         log_separator
         curl -sSL https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer >> "$logsInst" 2>&1
     fi
@@ -1033,7 +1028,7 @@ EOF
     # Installation TorrentPier
     if [ ! -d "$TORRENTPIER_PATH" ]; then
         log_separator
-        log_message "TorrentPier not installed. Installation in progress..."
+        print_info "TorrentPier not installed. Installation in progress..."
         log_separator
         # Creating a temporary directory
         mkdir -p "$TEMP_PATH" >> "$logsInst" 2>&1
