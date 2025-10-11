@@ -824,6 +824,7 @@ http://$HOST:9090 {
 
     # Packages for installation, TorrentPier, phpMyAdmin
     # Base packages (PHP $PHP_VERSION)
+    # Note: wget and gnupg are installed earlier if Manticore is enabled (but kept here for non-Manticore installs)
     pkgsList=("php$PHP_VERSION-fpm" "php$PHP_VERSION-mbstring" "php$PHP_VERSION-bcmath" "php$PHP_VERSION-intl" "php$PHP_VERSION-tidy" "php$PHP_VERSION-xml" "php$PHP_VERSION-zip" "php$PHP_VERSION-gd" "php$PHP_VERSION-curl" "php$PHP_VERSION-mysql" "mariadb-server" "pwgen" "jq" "curl" "wget" "gnupg" "zip" "unzip" "cron")
 
     # Add cache packages based on version
@@ -878,6 +879,26 @@ http://$HOST:9090 {
         print_info "PHP PPA repository already exists"
     fi
 
+    apt-get -y update >> "$logsInst" 2>&1
+
+    # Install wget and gnupg before adding Manticore repository (required for Manticore installation)
+    if [ "$INSTALL_MANTICORE" = true ]; then
+        print_info "Installing prerequisites for Manticore repository setup..."
+        for prereq_pkg in wget gnupg; do
+            if ! dpkg-query -W -f='${Status}' "$prereq_pkg" 2>/dev/null | grep -q "install ok installed"; then
+                apt-get install -y "$prereq_pkg" >> "$logsInst" 2>&1 || {
+                    print_warning "Failed to install $prereq_pkg"
+                    print_warning "Manticore installation will be skipped"
+                    INSTALL_MANTICORE=false
+                    break
+                }
+            fi
+        done
+        if [ "$INSTALL_MANTICORE" = true ]; then
+            print_success "Prerequisites installed (wget, gnupg)"
+        fi
+    fi
+
     # Add Manticore Search repository if needed
     if [ "$INSTALL_MANTICORE" = true ]; then
         print_info "Adding Manticore Search repository..."
@@ -904,6 +925,7 @@ http://$HOST:9090 {
         fi
     fi
 
+    # Update package lists after adding all repositories
     apt-get -y update >> "$logsInst" 2>&1
 
     # Log available PHP packages for diagnostics
