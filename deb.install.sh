@@ -807,6 +807,7 @@ http://$HOST:9090 {
     current_package=0
     
     print_info "Total packages to install: $total_packages"
+    print_info "Package list: ${pkgsList[*]}"
     
     # Package installation cycle
     print_info "Entering package installation loop..."
