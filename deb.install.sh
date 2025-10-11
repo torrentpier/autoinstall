@@ -789,11 +789,15 @@ http://$HOST:9090 {
             # Verify Caddy was installed
             if dpkg-query -W -f='${Status}' "caddy" 2>/dev/null | grep -q "install ok installed"; then
                 print_success "Caddy installed successfully"
+                # Enable Caddy on boot
+                systemctl enable caddy >> "$logsInst" 2>&1 || true
             else
                 error_exit "Caddy installation verification failed"
             fi
         else
             print_info "Caddy is already installed"
+            # Ensure Caddy is enabled on boot
+            systemctl enable caddy >> "$logsInst" 2>&1 || true
         fi
     fi
 
@@ -946,7 +950,12 @@ EOF
                 ;;
             caddy)
                 # Caddy config already includes phpMyAdmin
-                systemctl reload caddy >> "$logsInst" 2>&1
+                # Start Caddy if not running
+                if ! systemctl is-active --quiet caddy 2>/dev/null; then
+                    systemctl start caddy >> "$logsInst" 2>&1 || error_exit "Failed to start Caddy"
+                else
+                    systemctl reload caddy >> "$logsInst" 2>&1 || error_exit "Failed to reload Caddy"
+                fi
                 ;;
         esac
     else
@@ -1133,8 +1142,14 @@ EOF
                 # Create Caddy config
                 echo -e "$caddy_config" | tee /etc/caddy/Caddyfile >> "$logsInst" 2>&1
 
-                # Reload Caddy config
-                systemctl reload caddy >> "$logsInst" 2>&1
+                # Start or reload Caddy
+                if ! systemctl is-active --quiet caddy 2>/dev/null; then
+                    print_info "Starting Caddy..."
+                    systemctl start caddy >> "$logsInst" 2>&1 || error_exit "Failed to start Caddy"
+                else
+                    print_info "Reloading Caddy configuration..."
+                    systemctl reload caddy >> "$logsInst" 2>&1 || error_exit "Failed to reload Caddy"
+                fi
 
                 # Inform about automatic SSL
                 if [ "$USE_SSL" = true ]; then
