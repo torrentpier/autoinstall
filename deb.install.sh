@@ -23,19 +23,23 @@ NC='\033[0m' # No Color
 
 # Color output functions
 print_error() {
-    echo -e "${RED}[ERROR]${NC} $1" | tee -a "$logsInst" >&2
+    echo -e "${RED}[ERROR]${NC} $1" >&2
+    echo "[ERROR] $1" >> "$logsInst" 2>&1
 }
 
 print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1" | tee -a "$logsInst"
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    echo "[SUCCESS] $1" >> "$logsInst" 2>&1
 }
 
 print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1" | tee -a "$logsInst"
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+    echo "[WARNING] $1" >> "$logsInst" 2>&1
 }
 
 print_info() {
-    echo -e "${BLUE}[INFO]${NC} $1" | tee -a "$logsInst"
+    echo -e "${BLUE}[INFO]${NC} $1"
+    echo "[INFO] $1" >> "$logsInst" 2>&1
 }
 
 # Error handler
@@ -1143,7 +1147,7 @@ EOF
     perform_health_check
     
     # Print beautiful final summary
-    print_final_summary | tee -a "$saveFile"
+    print_final_summary
     
     # Save detailed credentials to file (without colors)
     {
