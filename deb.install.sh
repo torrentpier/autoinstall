@@ -296,6 +296,8 @@ perform_health_check() {
     echo -n "[Cron Job] Checking cron task... "
     if crontab -l 2>/dev/null | grep -q "$TORRENTPIER_PATH/cron.php"; then
         echo -e "${GREEN}OK${NC}"
+    elif sudo crontab -l 2>/dev/null | grep -q "$TORRENTPIER_PATH/cron.php"; then
+        echo -e "${GREEN}OK (sudo)${NC}"
     else
         echo -e "${YELLOW}WARNING (task not found in crontab)${NC}"
     fi
@@ -1074,8 +1076,24 @@ EOF
         # Setting the CRON task
         print_info "Setting up CRON task for TorrentPier..."
         if ! crontab -l 2>/dev/null | grep -q "$TORRENTPIER_PATH/cron.php"; then
+            # First attempt: normal crontab
             (crontab -l 2>/dev/null; echo "*/10 * * * * sudo -u www-data /usr/bin/php$PHP_VERSION $TORRENTPIER_PATH/cron.php") | crontab - >> "$logsInst" 2>&1
-            print_success "CRON task configured successfully"
+            
+            # Verify that cron task was actually added
+            if crontab -l 2>/dev/null | grep -q "$TORRENTPIER_PATH/cron.php"; then
+                print_success "CRON task configured successfully"
+            else
+                # Second attempt: try with sudo crontab
+                print_warning "First attempt failed, trying with sudo crontab..."
+                { (sudo crontab -l 2>/dev/null; echo "*/10 * * * * sudo -u www-data /usr/bin/php$PHP_VERSION $TORRENTPIER_PATH/cron.php") | sudo crontab -; } >> "$logsInst" 2>&1
+                
+                # Verify again
+                if sudo crontab -l 2>/dev/null | grep -q "$TORRENTPIER_PATH/cron.php"; then
+                    print_success "CRON task configured successfully (via sudo)"
+                else
+                    print_error "Failed to add CRON task. Please add manually: crontab -e"
+                fi
+            fi
         else
             print_info "CRON task already configured"
         fi
