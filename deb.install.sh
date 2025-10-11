@@ -809,8 +809,10 @@ http://$HOST:9090 {
     print_info "Total packages to install: $total_packages"
     
     # Package installation cycle
+    print_info "Entering package installation loop..."
     for package in "${pkgsList[@]}"; do
         ((current_package++))
+        print_info "Checking package: $package ($current_package/$total_packages)"
         # Checking for packages and installing packages
         if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
             print_info "[$current_package/$total_packages] Installing $package..."
