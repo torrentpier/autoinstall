@@ -191,7 +191,7 @@ calculate_time() {
     local hours=$((duration / 3600))
     local minutes=$(((duration % 3600) / 60))
     local seconds=$((duration % 60))
-    
+
     if [ $hours -gt 0 ]; then
         echo "${hours}h ${minutes}m ${seconds}s"
     elif [ $minutes -gt 0 ]; then
@@ -204,11 +204,11 @@ calculate_time() {
 # Health check function
 perform_health_check() {
     local all_ok=true
-    
+
     echo ""
     print_info "Performing post-installation health check..."
     echo ""
-    
+
     # Check web server
     echo -n "[Web Server] Checking $WEB_SERVER... "
     local webserver_service="$WEB_SERVER"
@@ -222,7 +222,7 @@ perform_health_check() {
         echo -e "${RED}FAIL${NC}"
         all_ok=false
     fi
-    
+
     # Check PHP-FPM
     echo -n "[PHP-FPM] Checking PHP $PHP_VERSION-FPM... "
     if systemctl is-active --quiet "php$PHP_VERSION-fpm" 2>/dev/null; then
@@ -231,7 +231,7 @@ perform_health_check() {
         echo -e "${RED}FAIL${NC}"
         all_ok=false
     fi
-    
+
     # Check MariaDB
     echo -n "[Database] Checking MariaDB... "
     if systemctl is-active --quiet mariadb 2>/dev/null || systemctl is-active --quiet mysql 2>/dev/null; then
@@ -240,7 +240,7 @@ perform_health_check() {
         echo -e "${RED}FAIL${NC}"
         all_ok=false
     fi
-    
+
     # Check website accessibility
     echo -n "[Website] Checking accessibility... "
     if curl -sf -o /dev/null -m 10 "$PROTOCOL://$HOST/" 2>/dev/null; then
@@ -248,7 +248,7 @@ perform_health_check() {
     else
         echo -e "${YELLOW}WARNING (might need DNS or firewall config)${NC}"
     fi
-    
+
     # Check phpMyAdmin
     echo -n "[phpMyAdmin] Checking accessibility... "
     if curl -sf -o /dev/null -m 10 "$PROTOCOL://$HOST:9090/" 2>/dev/null; then
@@ -256,7 +256,7 @@ perform_health_check() {
     else
         echo -e "${YELLOW}WARNING${NC}"
     fi
-    
+
     # Check database connection
     echo -n "[DB Connection] Checking connection... "
     if MYSQL_PWD="$passSql" mysql -u "$userSql" -e "SELECT 1;" "$dbSql" &>/dev/null; then
@@ -265,7 +265,7 @@ perform_health_check() {
         echo -e "${RED}FAIL${NC}"
         all_ok=false
     fi
-    
+
     # Check TorrentPier files
     echo -n "[Files] Checking TorrentPier files... "
     if [ -f "$TORRENTPIER_PATH/index.php" ] && [ -f "$TORRENTPIER_PATH/.env" ]; then
@@ -274,7 +274,7 @@ perform_health_check() {
         echo -e "${RED}FAIL${NC}"
         all_ok=false
     fi
-    
+
     # Check vendor directory
     echo -n "[Dependencies] Checking Composer... "
     if [ -d "$TORRENTPIER_PATH/vendor" ] && [ -f "$TORRENTPIER_PATH/vendor/autoload.php" ]; then
@@ -283,7 +283,7 @@ perform_health_check() {
         echo -e "${RED}FAIL${NC}"
         all_ok=false
     fi
-    
+
     # Check cron job
     echo -n "[Cron] Checking cron job... "
     if crontab -l 2>/dev/null | grep -q "$TORRENTPIER_PATH/cron.php"; then
@@ -291,7 +291,7 @@ perform_health_check() {
     else
         echo -e "${YELLOW}WARNING${NC}"
     fi
-    
+
     # Check file permissions
     echo -n "[Permissions] Checking file permissions... "
     if [ "$(stat -c '%U' "$TORRENTPIER_PATH")" = "www-data" ]; then
@@ -299,22 +299,22 @@ perform_health_check() {
     else
         echo -e "${YELLOW}WARNING${NC}"
     fi
-    
+
     echo ""
-    
+
     if [ "$all_ok" = true ]; then
         print_success "Health check passed! All critical services are running."
     else
         print_warning "Health check completed with warnings. Some services may need attention."
     fi
-    
+
     echo ""
 }
 
 # Print final summary
 print_final_summary() {
     local install_time=$(calculate_time)
-    
+
     echo ""
     echo -e "${GREEN}================================================================${NC}"
     echo -e "${GREEN}              TorrentPier Installation Complete!               ${NC}"
@@ -366,7 +366,7 @@ print_final_summary() {
 check_ram() {
     local min_ram=512 # MB
     local available_ram=$(free -m | awk '/^Mem:/{print $2}')
-    
+
     if [ "$available_ram" -lt "$min_ram" ]; then
         error_exit "Insufficient RAM. Required: ${min_ram}MB, Available: ${available_ram}MB"
     fi
@@ -376,7 +376,7 @@ check_ram() {
 check_disk_space() {
     local min_space=2 # GB
     local available_space=$(df -BG / | awk 'NR==2 {print $4}' | sed 's/G//')
-    
+
     if [ "$available_space" -lt "$min_space" ]; then
         error_exit "Insufficient disk space. Required: ${min_space}GB, Available: ${available_space}GB"
     fi
@@ -386,7 +386,7 @@ check_disk_space() {
 check_port() {
     local port=$1
     local service=$2
-    
+
     if ss -tuln | grep -q ":$port "; then
         print_warning "Port $port is already in use (required for $service)"
         return 1
@@ -397,11 +397,11 @@ check_port() {
 check_ports() {
     print_info "Checking required ports availability..."
     local ports_ok=true
-    
+
     check_port 80 "HTTP" || ports_ok=false
     check_port 443 "HTTPS" || ports_ok=false
     check_port 9090 "phpMyAdmin" || ports_ok=false
-    
+
     if [ "$ports_ok" = false ]; then
         print_error "Some required ports are already in use!"
         read -p "Continue anyway? (y/N): " -n 1 -r
@@ -426,14 +426,14 @@ done
 if $foundOs; then
     # Print system information for diagnostics
     print_system_info
-    
+
     # Run system requirements checks
     print_info "Running system requirements checks..."
     check_ram
     check_disk_space
     check_ports
     echo ""
-    
+
     # Dry-run mode - show what would be installed and exit
     if [ "$DRY_RUN" = true ]; then
         print_info "DRY-RUN MODE - No actual installation will be performed"
@@ -460,7 +460,7 @@ if $foundOs; then
         print_info "Run without --dry-run to perform actual installation"
         exit 0
     fi
-    
+
     # A function to check whether a string is an IP address
     is_ip() {
         local ip="$1"
@@ -521,7 +521,7 @@ if $foundOs; then
         # It's a domain, check SSL settings
         if [ "$SSL_ENABLE" = "auto" ] || [ "$SSL_ENABLE" = "yes" ]; then
             USE_SSL=true
-            
+
             # Request email if not provided
             if [ -z "$SSL_EMAIL" ]; then
                 while true; do
@@ -535,7 +535,7 @@ if $foundOs; then
                     fi
                 done
             fi
-            
+
             print_success "SSL will be automatically configured for domain: $HOST"
             print_info "Email for certificates: $SSL_EMAIL"
         fi
@@ -721,7 +721,7 @@ http://$HOST:9090 {
     # Packages for installation, TorrentPier, phpMyAdmin
     # Base packages (PHP $PHP_VERSION)
     pkgsList=("php$PHP_VERSION-fpm" "php$PHP_VERSION-mbstring" "php$PHP_VERSION-bcmath" "php$PHP_VERSION-intl" "php$PHP_VERSION-tidy" "php$PHP_VERSION-xml" "php$PHP_VERSION-zip" "php$PHP_VERSION-gd" "php$PHP_VERSION-curl" "php$PHP_VERSION-mysql" "mariadb-server" "pwgen" "jq" "curl" "zip" "unzip" "cron")
-    
+
     # Add web server specific packages
     case "$WEB_SERVER" in
         nginx)
@@ -756,7 +756,7 @@ http://$HOST:9090 {
     # Add PHP repository
     print_info "Adding PHP $PHP_VERSION repository"
     apt-get install -y lsb-release ca-certificates apt-transport-https software-properties-common >> "$logsInst" 2>&1
-    
+
     # Add Ondřej Surý's PPA for PHP (via Launchpad, more reliable)
     if ! grep -q "ondrej/php" /etc/apt/sources.list.d/* 2>/dev/null; then
         LC_ALL=C.UTF-8 add-apt-repository ppa:ondrej/php -y >> "$logsInst" 2>&1
@@ -764,9 +764,9 @@ http://$HOST:9090 {
     else
         print_info "PHP PPA repository already exists"
     fi
-    
+
     apt-get -y update >> "$logsInst" 2>&1
-    
+
     # Log available PHP packages for diagnostics
     echo "Available PHP $PHP_VERSION packages:" >> "$logsInst"
     apt-cache search "php$PHP_VERSION" | grep "^php$PHP_VERSION" | head -20 >> "$logsInst" 2>&1 || true
@@ -785,7 +785,7 @@ http://$HOST:9090 {
             curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list >> "$logsInst" 2>&1 || error_exit "Failed to add Caddy repository"
             apt-get update >> "$logsInst" 2>&1 || error_exit "Failed to update package cache"
             apt-get install -y caddy >> "$logsInst" 2>&1 || error_exit "Failed to install Caddy"
-            
+
             # Verify Caddy was installed
             if dpkg-query -W -f='${Status}' "caddy" 2>/dev/null | grep -q "install ok installed"; then
                 print_success "Caddy installed successfully"
@@ -799,37 +799,35 @@ http://$HOST:9090 {
 
     # Temporarily disable error trap for package installation
     trap - ERR
-    
+
     print_info "Starting package installation phase..."
-    
+
     # Calculate total packages for progress tracking
     total_packages=${#pkgsList[@]}
     current_package=0
-    
+
     print_info "Total packages to install: $total_packages"
     print_info "Package list: ${pkgsList[*]}"
-    
+
     # Package installation cycle
-    print_info "Entering package installation loop..."
     for package in "${pkgsList[@]}"; do
-        ((current_package++))
-        print_info "Checking package: $package ($current_package/$total_packages)"
+        current_package=$((current_package + 1))
         # Checking for packages and installing packages
         if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
             print_info "[$current_package/$total_packages] Installing $package..."
-            
+
             # Check if package is available in repositories
             if ! apt-cache show "$package" &>/dev/null; then
                 print_warning "Package $package is not available in repositories"
                 print_info "Updating package cache and retrying..."
                 apt-get update >> "$logsInst" 2>&1 || true
-                
+
                 if ! apt-cache show "$package" &>/dev/null; then
                     trap 'error_exit "An error occurred on line $LINENO"' ERR
                     error_exit "Package $package is not available in repositories. Check PHP repository configuration."
                 fi
             fi
-            
+
             # Special handling for PHP-FPM to avoid startup failures during installation
             if [[ "$package" == php*-fpm ]]; then
                 # Install without starting the service
@@ -839,7 +837,7 @@ http://$HOST:9090 {
                     dpkg --configure -a >> "$logsInst" 2>&1 || true
                     systemctl stop "php$PHP_VERSION-fpm" 2>/dev/null || true
                     apt-get install -y -f >> "$logsInst" 2>&1 || true
-                    
+
                     # Verify installation succeeded
                     if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
                         trap 'error_exit "An error occurred on line $LINENO"' ERR
@@ -853,11 +851,11 @@ http://$HOST:9090 {
                     echo "=== APT Error for $package ===" >> "$logsInst"
                     DEBIAN_FRONTEND=noninteractive apt-get install -y "$package" 2>&1 | tail -50 >> "$logsInst" || true
                     echo "=== End of APT Error ===" >> "$logsInst"
-                    
+
                     # Try to fix broken packages
                     dpkg --configure -a >> "$logsInst" 2>&1 || true
                     apt-get install -y -f >> "$logsInst" 2>&1 || true
-                    
+
                     # Retry installation
                     if ! DEBIAN_FRONTEND=noninteractive apt-get install -y "$package" >> "$logsInst" 2>&1; then
                         # Verify if package is actually installed despite error
@@ -873,7 +871,7 @@ http://$HOST:9090 {
                     fi
                 fi
             fi
-            
+
             # Final verification that package was installed successfully
             if dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
                 print_success "[$current_package/$total_packages] $package installed successfully"
@@ -885,21 +883,21 @@ http://$HOST:9090 {
             print_info "[$current_package/$total_packages] $package is already installed"
         fi
     done
-    
+
     # Re-enable error trap
     trap 'error_exit "An error occurred on line $LINENO"' ERR
 
     # Configure and start PHP-FPM
     print_info "Configuring PHP $PHP_VERSION-FPM..."
-    
+
     # Check if PHP-FPM is installed
     if ! dpkg-query -W -f='${Status}' "php$PHP_VERSION-fpm" 2>/dev/null | grep -q "install ok installed"; then
         error_exit "PHP $PHP_VERSION-FPM is not installed. Installation failed."
     fi
-    
+
     # Enable PHP-FPM on boot
     systemctl enable "php$PHP_VERSION-fpm" >> "$logsInst" 2>&1 || true
-    
+
     # Start PHP-FPM if not running
     if ! systemctl is-active --quiet "php$PHP_VERSION-fpm" 2>/dev/null; then
         print_info "Starting PHP-FPM service..."
@@ -931,7 +929,7 @@ phpmyadmin phpmyadmin/password-confirm password $passPma
 phpmyadmin phpmyadmin/reconfigure-webserver multiselect
 EOF
         DEBIAN_FRONTEND="noninteractive" apt-get install -y phpmyadmin >> "$logsInst" 2>&1
-        
+
         # Configure phpMyAdmin for selected web server
         case "$WEB_SERVER" in
             nginx)
@@ -975,15 +973,15 @@ EOF
         elif [ "$TP_VERSION" == "v2.8" ]; then
             curl -s https://api.github.com/repos/torrentpier/torrentpier/releases | jq -r 'map(select(.prerelease == false and (.tag_name | test("^v2\\.8\\.")))) | .[0].zipball_url' | xargs -n 1 curl -L -o "$TEMP_PATH/torrentpier.zip" >> "$logsInst" 2>&1 || error_exit "Failed to download TorrentPier v2.8"
         fi
-        
+
         # Check if download was successful
         [ -f "$TEMP_PATH/torrentpier.zip" ] || error_exit "TorrentPier archive not found after download"
-        
+
         unzip -o "$TEMP_PATH/torrentpier.zip" -d "$TEMP_PATH" >> "$logsInst" 2>&1 || error_exit "Failed to extract TorrentPier archive"
-        
+
         # Create parent directory if it doesn't exist
         mkdir -p "$(dirname "$TORRENTPIER_PATH")" >> "$logsInst" 2>&1 || error_exit "Failed to create parent directory for TorrentPier"
-        
+
         mv "$TEMP_PATH"/torrentpier-torrentpier-* "$TORRENTPIER_PATH" >> "$logsInst" 2>&1 || error_exit "Failed to move TorrentPier files"
 
         # Remove temporary folder
@@ -1080,7 +1078,7 @@ EOF
                 if [ "$USE_SSL" = true ]; then
                     print_info "Obtaining SSL certificate for NGINX..."
                     certbot --nginx -d "$HOST" --non-interactive --agree-tos --email "$SSL_EMAIL" --redirect >> "$logsInst" 2>&1
-                    
+
                     # Setup auto-renewal
                     if ! crontab -l 2>/dev/null | grep -q "certbot renew"; then
                         (crontab -l 2>/dev/null; echo "0 3 * * * certbot renew --quiet --post-hook 'systemctl reload nginx'") | crontab - >> "$logsInst" 2>&1
@@ -1098,12 +1096,12 @@ EOF
                 # Enable required modules
                 a2enmod proxy_fcgi setenvif rewrite ssl >> "$logsInst" 2>&1
                 a2enconf php$PHP_VERSION-fpm >> "$logsInst" 2>&1
-                
+
                 # Create port 9090 configuration for Apache
                 if ! grep -q "Listen 9090" /etc/apache2/ports.conf; then
                     echo "Listen 9090" >> /etc/apache2/ports.conf 2>> "$logsInst"
                 fi
-                
+
                 # Disable default site and create TorrentPier config
                 a2dissite 000-default >> "$logsInst" 2>&1
                 echo -e "$apache_torrentpier" | tee /etc/apache2/sites-available/01-torrentpier.conf >> "$logsInst" 2>&1
@@ -1117,7 +1115,7 @@ EOF
                 if [ "$USE_SSL" = true ]; then
                     print_info "Obtaining SSL certificate for Apache..."
                     certbot --apache -d "$HOST" --non-interactive --agree-tos --email "$SSL_EMAIL" --redirect >> "$logsInst" 2>&1
-                    
+
                     # Setup auto-renewal
                     if ! crontab -l 2>/dev/null | grep -q "certbot renew"; then
                         (crontab -l 2>/dev/null; echo "0 3 * * * certbot renew --quiet --post-hook 'systemctl reload apache2'") | crontab - >> "$logsInst" 2>&1
@@ -1160,10 +1158,10 @@ EOF
 
     # Perform health check
     perform_health_check
-    
+
     # Print beautiful final summary
     print_final_summary
-    
+
     # Save detailed credentials to file (without colors)
     {
         echo ""
