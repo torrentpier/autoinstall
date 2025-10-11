@@ -719,7 +719,8 @@ $HOST:9090 {
     tls $SSL_EMAIL
 }"
     else
-        caddy_config="$HOST {
+        # For IP addresses or when SSL is disabled, use http:// prefix to prevent automatic HTTPS
+        caddy_config="http://$HOST {
         root * $TORRENTPIER_PATH
     encode gzip zstd
     php_fastcgi unix:/run/php/php$PHP_VERSION-fpm.sock
@@ -742,7 +743,7 @@ $HOST:9090 {
     header @html_css_js Content-Type \"{mime}; charset=utf-8\"
 }
 
-$HOST:9090 {
+http://$HOST:9090 {
     root * $PHPMYADMIN_PATH
     encode gzip zstd
     php_fastcgi unix:/run/php/php$PHP_VERSION-fpm.sock
