@@ -999,7 +999,8 @@ EOF
         # Installing composer dependencies
         if [ ! -d "$TORRENTPIER_PATH/vendor" ]; then
             print_info "Installing composer dependencies..."
-            COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --prefer-dist --optimize-autoloader --working-dir="$TORRENTPIER_PATH" >> "$logsInst" 2>&1 || error_exit "Failed to install composer dependencies"
+            # Use specific PHP version to ensure correct extensions are loaded
+            COMPOSER_ALLOW_SUPERUSER=1 /usr/bin/php$PHP_VERSION /usr/local/bin/composer install --no-dev --prefer-dist --optimize-autoloader --working-dir="$TORRENTPIER_PATH" >> "$logsInst" 2>&1 || error_exit "Failed to install composer dependencies"
             print_success "Composer dependencies installed successfully"
         else
             print_info "Vendor directory already exists, skipping composer install"
@@ -1046,7 +1047,7 @@ EOF
             # v2.8: Run Phinx migrations
             print_info "Running Phinx migrations (v2.8)..."
             cd "$TORRENTPIER_PATH" || error_exit "Failed to change directory to $TORRENTPIER_PATH"
-            php vendor/bin/phinx migrate --configuration=phinx.php >> "$logsInst" 2>&1 || error_exit "Failed to run Phinx migrations"
+            /usr/bin/php$PHP_VERSION vendor/bin/phinx migrate --configuration=phinx.php >> "$logsInst" 2>&1 || error_exit "Failed to run Phinx migrations"
             print_success "Database migrations completed successfully"
         fi
 
@@ -1058,7 +1059,7 @@ EOF
         # Setting the CRON task
         print_info "Setting up CRON task for TorrentPier..."
         if ! crontab -l 2>/dev/null | grep -q "$TORRENTPIER_PATH/cron.php"; then
-            (crontab -l 2>/dev/null; echo "*/10 * * * * sudo -u www-data php $TORRENTPIER_PATH/cron.php") | crontab - >> "$logsInst" 2>&1
+            (crontab -l 2>/dev/null; echo "*/10 * * * * sudo -u www-data /usr/bin/php$PHP_VERSION $TORRENTPIER_PATH/cron.php") | crontab - >> "$logsInst" 2>&1
             print_success "CRON task configured successfully"
         else
             print_info "CRON task already configured"
