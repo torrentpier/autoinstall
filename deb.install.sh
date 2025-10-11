@@ -552,7 +552,7 @@ if $foundOs; then
         elif [ "$TP_VERSION" == "v2.8" ]; then
             echo "  - memcached php$PHP_VERSION-memcached (for v2.8 cache)"
             if [ "$INSTALL_MANTICORE" = true ]; then
-                echo "  - manticore manticore-dev (for v2.8 search engine)"
+                echo "  - manticore (for v2.8 search engine)"
             fi
         fi
         # Certbot is only needed for nginx/apache with SSL enabled
@@ -881,10 +881,24 @@ http://$HOST:9090 {
     # Add Manticore Search repository if needed
     if [ "$INSTALL_MANTICORE" = true ]; then
         print_info "Adding Manticore Search repository..."
-        wget -qO - https://repo.manticoresearch.com/GPG-KEY-manticore >> "$logsInst" 2>&1 | apt-key add - >> "$logsInst" 2>&1 || true
         if [ ! -f /etc/apt/sources.list.d/manticore.list ]; then
-            echo "deb https://repo.manticoresearch.com/manticore-repo/deb generic main" | tee /etc/apt/sources.list.d/manticore.list >> "$logsInst" 2>&1
-            print_success "Manticore Search repository added"
+            # Download official Manticore repository setup package
+            print_info "Downloading Manticore repository package..."
+            if wget -q -O /tmp/manticore-repo.deb https://repo.manticoresearch.com/manticore-repo.noarch.deb >> "$logsInst" 2>&1; then
+                print_info "Installing Manticore repository package..."
+                if dpkg -i /tmp/manticore-repo.deb >> "$logsInst" 2>&1; then
+                    print_success "Manticore Search repository added successfully"
+                else
+                    print_warning "Failed to install Manticore repository package"
+                    print_warning "Manticore installation will be skipped, using MySQL for search"
+                    INSTALL_MANTICORE=false
+                fi
+                rm -f /tmp/manticore-repo.deb
+            else
+                print_warning "Failed to download Manticore repository package"
+                print_warning "Manticore installation will be skipped, using MySQL for search"
+                INSTALL_MANTICORE=false
+            fi
         else
             print_info "Manticore Search repository already exists"
         fi
@@ -906,22 +920,52 @@ http://$HOST:9090 {
     if [ "$INSTALL_MANTICORE" = true ]; then
         if ! dpkg-query -W -f='${Status}' "manticore" 2>/dev/null | grep -q "install ok installed"; then
             print_info "Installing Manticore Search..."
-            apt-get install -y manticore manticore-dev >> "$logsInst" 2>&1 || error_exit "Failed to install Manticore Search"
             
-            # Enable and start Manticore
-            systemctl enable manticore >> "$logsInst" 2>&1 || true
-            systemctl start manticore >> "$logsInst" 2>&1 || error_exit "Failed to start Manticore"
+            # Log available Manticore packages for diagnostics
+            echo "Available Manticore packages:" >> "$logsInst"
+            apt-cache search manticore | grep "^manticore" >> "$logsInst" 2>&1 || true
             
-            if dpkg-query -W -f='${Status}' "manticore" 2>/dev/null | grep -q "install ok installed"; then
-                print_success "Manticore Search installed successfully"
+            # Install only manticore package (manticore-dev is not required)
+            if apt-get install -y manticore >> "$logsInst" 2>&1; then
+                print_success "Manticore Search package installed"
             else
-                error_exit "Manticore Search installation verification failed"
+                print_error "Failed to install Manticore Search package"
+                print_warning "Falling back to MySQL search (--manticore no)"
+                INSTALL_MANTICORE=false
+            fi
+            
+            if [ "$INSTALL_MANTICORE" = true ]; then
+                # Enable and start Manticore
+                systemctl enable manticore >> "$logsInst" 2>&1 || true
+                
+                if systemctl start manticore >> "$logsInst" 2>&1; then
+                    print_success "Manticore Search service started"
+                else
+                    print_warning "Failed to start Manticore Search service"
+                    print_warning "Falling back to MySQL search"
+                    INSTALL_MANTICORE=false
+                fi
+                
+                # Verify installation
+                if [ "$INSTALL_MANTICORE" = true ]; then
+                    if dpkg-query -W -f='${Status}' "manticore" 2>/dev/null | grep -q "install ok installed"; then
+                        print_success "Manticore Search installed successfully"
+                    else
+                        print_warning "Manticore Search installation verification failed"
+                        INSTALL_MANTICORE=false
+                    fi
+                fi
             fi
         else
             print_info "Manticore Search is already installed"
             systemctl enable manticore >> "$logsInst" 2>&1 || true
             if ! systemctl is-active --quiet manticore 2>/dev/null; then
-                systemctl start manticore >> "$logsInst" 2>&1 || error_exit "Failed to start Manticore"
+                if systemctl start manticore >> "$logsInst" 2>&1; then
+                    print_success "Manticore Search service started"
+                else
+                    print_warning "Failed to start existing Manticore installation"
+                    INSTALL_MANTICORE=false
+                fi
             fi
         fi
     fi
