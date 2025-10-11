@@ -824,7 +824,7 @@ http://$HOST:9090 {
 
     # Packages for installation, TorrentPier, phpMyAdmin
     # Base packages (PHP $PHP_VERSION)
-    pkgsList=("php$PHP_VERSION-fpm" "php$PHP_VERSION-mbstring" "php$PHP_VERSION-bcmath" "php$PHP_VERSION-intl" "php$PHP_VERSION-tidy" "php$PHP_VERSION-xml" "php$PHP_VERSION-zip" "php$PHP_VERSION-gd" "php$PHP_VERSION-curl" "php$PHP_VERSION-mysql" "mariadb-server" "pwgen" "jq" "curl" "zip" "unzip" "cron")
+    pkgsList=("php$PHP_VERSION-fpm" "php$PHP_VERSION-mbstring" "php$PHP_VERSION-bcmath" "php$PHP_VERSION-intl" "php$PHP_VERSION-tidy" "php$PHP_VERSION-xml" "php$PHP_VERSION-zip" "php$PHP_VERSION-gd" "php$PHP_VERSION-curl" "php$PHP_VERSION-mysql" "mariadb-server" "pwgen" "jq" "curl" "wget" "gnupg" "zip" "unzip" "cron")
 
     # Add cache packages based on version
     if [ "$TP_VERSION" == "v2.4" ]; then
@@ -925,21 +925,33 @@ http://$HOST:9090 {
             echo "Available Manticore packages:" >> "$logsInst"
             apt-cache search manticore | grep "^manticore" >> "$logsInst" 2>&1 || true
             
-            # Install only manticore package (manticore-dev is not required)
-            if apt-get install -y manticore >> "$logsInst" 2>&1; then
-                print_success "Manticore Search package installed"
+            # Install manticore and manticore-extra packages
+            if apt-get install -y manticore manticore-extra >> "$logsInst" 2>&1; then
+                print_success "Manticore Search packages installed"
             else
-                print_error "Failed to install Manticore Search package"
-                print_warning "Falling back to MySQL search (--manticore no)"
+                print_warning "Failed to install Manticore Search packages"
+                print_warning "Falling back to MySQL search"
                 INSTALL_MANTICORE=false
             fi
             
             if [ "$INSTALL_MANTICORE" = true ]; then
                 # Enable and start Manticore
+                print_info "Enabling and starting Manticore Search service..."
                 systemctl enable manticore >> "$logsInst" 2>&1 || true
                 
                 if systemctl start manticore >> "$logsInst" 2>&1; then
                     print_success "Manticore Search service started"
+                    
+                    # Wait a moment for service to fully start
+                    sleep 2
+                    
+                    # Verify service is running
+                    if systemctl is-active --quiet manticore 2>/dev/null; then
+                        print_success "Manticore Search is running"
+                    else
+                        print_warning "Manticore Search service may not be running properly"
+                        print_info "You can check status with: systemctl status manticore"
+                    fi
                 else
                     print_warning "Failed to start Manticore Search service"
                     print_warning "Falling back to MySQL search"
@@ -960,12 +972,20 @@ http://$HOST:9090 {
             print_info "Manticore Search is already installed"
             systemctl enable manticore >> "$logsInst" 2>&1 || true
             if ! systemctl is-active --quiet manticore 2>/dev/null; then
+                print_info "Starting Manticore Search service..."
                 if systemctl start manticore >> "$logsInst" 2>&1; then
-                    print_success "Manticore Search service started"
+                    sleep 2
+                    if systemctl is-active --quiet manticore 2>/dev/null; then
+                        print_success "Manticore Search service started"
+                    else
+                        print_warning "Manticore Search service may not be running properly"
+                    fi
                 else
                     print_warning "Failed to start existing Manticore installation"
                     INSTALL_MANTICORE=false
                 fi
+            else
+                print_success "Manticore Search is already running"
             fi
         fi
     fi
