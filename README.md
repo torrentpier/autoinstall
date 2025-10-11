@@ -27,7 +27,7 @@ chmod +x ./autoinstall/install.sh
 ```
 **Run automatic installation**
 ```bash
-# Default installation (NGINX, v2.4, SSL auto)
+# Default installation (NGINX, v2.8, SSL auto)
 ./autoinstall/install.sh
 
 # With custom options
@@ -50,7 +50,7 @@ chmod +x ./autoinstall/install.sh
 
 **Available options:**
 - `--webserver <nginx|apache|caddy>` - Choose web server (default: nginx)
-- `--version <v2.4|v2.8>` - Choose TorrentPier version (default: v2.4)
+- `--version <v2.4|v2.8>` - Choose TorrentPier version (default: v2.8)
 - `--php-version <8.2|8.3|8.4>` - Choose PHP version (default: 8.4)
 - `--ssl <auto|yes|no>` - Enable SSL/TLS (default: auto - enabled for domains only)
 - `--email <email@example.com>` - Email for SSL certificate (required if domain is used)

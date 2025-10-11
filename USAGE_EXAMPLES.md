@@ -2,7 +2,7 @@
 
 ## Quick Start
 
-### Default Installation (NGINX + v2.4)
+### Default Installation (NGINX + v2.8)
 ```bash
 ./autoinstall/install.sh
 ```
@@ -75,7 +75,7 @@ Usage: ./autoinstall/deb.install.sh [OPTIONS]
 
 Options:
   --webserver <nginx|apache|caddy>  Choose web server (default: nginx)
-  --version <v2.4|v2.8>              Choose TorrentPier version (default: v2.4)
+  --version <v2.4|v2.8>              Choose TorrentPier version (default: v2.8)
   --ssl <auto|yes|no>                Enable SSL/TLS (default: auto - only for domains)
   --email <email@example.com>        Email for SSL certificate (required if domain is used)
   --help                             Show this help message
@@ -95,7 +95,7 @@ Options:
 
 ### Default Values:
 - Web Server: `nginx`
-- TorrentPier Version: `v2.4`
+- TorrentPier Version: `v2.8`
 - PHP Version: `8.4` (automatically installed)
 - SSL: `auto` (enabled for domains, disabled for IPs)
 - Cron Schedule: `*/10 * * * *` (every 10 minutes)

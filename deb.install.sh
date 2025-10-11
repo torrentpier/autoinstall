@@ -54,7 +54,7 @@ trap 'error_exit "An error occurred on line $LINENO"' ERR
 
 # Default values
 WEB_SERVER="nginx"
-TP_VERSION="v2.4"
+TP_VERSION="v2.8"
 SSL_ENABLE="auto"
 SSL_EMAIL=""
 PHP_VERSION="8.4"
@@ -92,7 +92,7 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Options:"
             echo "  --webserver <nginx|apache|caddy>  Choose web server (default: nginx)"
-            echo "  --version <v2.4|v2.8>              Choose TorrentPier version (default: v2.4)"
+            echo "  --version <v2.4|v2.8>              Choose TorrentPier version (default: v2.8)"
             echo "  --php-version <8.2|8.3|8.4>        Choose PHP version (default: 8.4)"
             echo "  --ssl <auto|yes|no>                Enable SSL/TLS (default: auto - only for domains)"
             echo "  --email <email@example.com>        Email for SSL certificate (required if domain is used)"
