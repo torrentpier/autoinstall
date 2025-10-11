@@ -241,6 +241,28 @@ perform_health_check() {
         all_ok=false
     fi
 
+    # Check Redis (for v2.4)
+    if [ "$TP_VERSION" == "v2.4" ]; then
+        echo -n "[Cache] Checking Redis... "
+        if systemctl is-active --quiet redis-server 2>/dev/null; then
+            echo -e "${GREEN}OK${NC}"
+        else
+            echo -e "${RED}FAIL${NC}"
+            all_ok=false
+        fi
+    fi
+
+    # Check Memcached (for v2.8)
+    if [ "$TP_VERSION" == "v2.8" ]; then
+        echo -n "[Cache] Checking Memcached... "
+        if systemctl is-active --quiet memcached 2>/dev/null; then
+            echo -e "${GREEN}OK${NC}"
+        else
+            echo -e "${RED}FAIL${NC}"
+            all_ok=false
+        fi
+    fi
+
     # Check website accessibility
     echo -n "[Website] Checking accessibility... "
     if curl -sf -o /dev/null -m 10 "$PROTOCOL://$HOST/" 2>/dev/null; then
@@ -353,6 +375,11 @@ print_final_summary() {
     echo -e "   - Web Server:      ${BLUE}$WEB_SERVER${NC}"
     echo -e "   - PHP Version:     ${BLUE}$PHP_VERSION${NC}"
     echo -e "   - TorrentPier:     ${BLUE}$TP_VERSION${NC}"
+    if [ "$TP_VERSION" == "v2.4" ]; then
+        echo -e "   - Cache System:    ${BLUE}Redis${NC}"
+    elif [ "$TP_VERSION" == "v2.8" ]; then
+        echo -e "   - Cache System:    ${BLUE}Memcached${NC}"
+    fi
     [ "$USE_SSL" = true ] && echo -e "   - SSL/TLS:         ${GREEN}Enabled${NC} (${SSL_EMAIL})"
     echo ""
     echo -e "${YELLOW}Important Files:${NC}"
@@ -461,6 +488,12 @@ if $foundOs; then
         echo "  - php$PHP_VERSION-zip php$PHP_VERSION-gd php$PHP_VERSION-curl php$PHP_VERSION-mysql"
         echo "  - mariadb-server composer"
         echo "  - $WEB_SERVER"
+        # Cache system packages
+        if [ "$TP_VERSION" == "v2.4" ]; then
+            echo "  - redis-server php$PHP_VERSION-redis (for v2.4 cache)"
+        elif [ "$TP_VERSION" == "v2.8" ]; then
+            echo "  - memcached php$PHP_VERSION-memcached (for v2.8 cache)"
+        fi
         # Certbot is only needed for nginx/apache with SSL enabled
         if [[ "$WEB_SERVER" != "caddy" ]] && [[ "$SSL_ENABLE" =~ ^(auto|yes)$ ]]; then
             echo "  - certbot python3-certbot-$WEB_SERVER (if domain is used)"
@@ -731,6 +764,15 @@ http://$HOST:9090 {
     # Packages for installation, TorrentPier, phpMyAdmin
     # Base packages (PHP $PHP_VERSION)
     pkgsList=("php$PHP_VERSION-fpm" "php$PHP_VERSION-mbstring" "php$PHP_VERSION-bcmath" "php$PHP_VERSION-intl" "php$PHP_VERSION-tidy" "php$PHP_VERSION-xml" "php$PHP_VERSION-zip" "php$PHP_VERSION-gd" "php$PHP_VERSION-curl" "php$PHP_VERSION-mysql" "mariadb-server" "pwgen" "jq" "curl" "zip" "unzip" "cron")
+
+    # Add cache packages based on version
+    if [ "$TP_VERSION" == "v2.4" ]; then
+        pkgsList+=("redis-server" "php$PHP_VERSION-redis")
+        print_info "Redis will be installed for TorrentPier v2.4"
+    elif [ "$TP_VERSION" == "v2.8" ]; then
+        pkgsList+=("memcached" "php$PHP_VERSION-memcached")
+        print_info "Memcached will be installed for TorrentPier v2.8"
+    fi
 
     # Add web server specific packages
     case "$WEB_SERVER" in
@@ -1061,6 +1103,54 @@ EOF
             print_success "Database migrations completed successfully"
         fi
 
+        # Configure cache system in library/config.php
+        print_info "Configuring cache system..."
+        if [ -f "$TORRENTPIER_PATH/library/config.php" ]; then
+            if [ "$TP_VERSION" == "v2.4" ]; then
+                # Configure Redis for v2.4
+                print_info "Configuring Redis cache for v2.4..."
+                sed -i "s/'bb_cache' => \['filecache'\]/'bb_cache' => ['redis']/g" "$TORRENTPIER_PATH/library/config.php"
+                sed -i "s/'bb_config' => \['filecache'\]/'bb_config' => ['redis']/g" "$TORRENTPIER_PATH/library/config.php"
+                sed -i "s/'tr_cache' => \['filecache'\]/'tr_cache' => ['redis']/g" "$TORRENTPIER_PATH/library/config.php"
+                sed -i "s/'session_cache' => \['filecache'\]/'session_cache' => ['redis']/g" "$TORRENTPIER_PATH/library/config.php"
+                sed -i "s/'bb_cap_sid' => \['filecache'\]/'bb_cap_sid' => ['redis']/g" "$TORRENTPIER_PATH/library/config.php"
+                sed -i "s/'bb_login_err' => \['filecache'\]/'bb_login_err' => ['redis']/g" "$TORRENTPIER_PATH/library/config.php"
+                sed -i "s/'bb_poll_data' => \['filecache'\]/'bb_poll_data' => ['redis']/g" "$TORRENTPIER_PATH/library/config.php"
+                sed -i "s/'bb_ip2countries' => \['filecache'\]/'bb_ip2countries' => ['redis']/g" "$TORRENTPIER_PATH/library/config.php"
+                sed -i "s/\$bb_cfg\['datastore_type'\] = 'filecache'/\$bb_cfg['datastore_type'] = 'redis'/g" "$TORRENTPIER_PATH/library/config.php"
+                
+                # Ensure Redis is running
+                if ! systemctl is-active --quiet redis-server 2>/dev/null; then
+                    print_info "Starting Redis..."
+                    systemctl enable redis-server >> "$logsInst" 2>&1 || true
+                    systemctl start redis-server >> "$logsInst" 2>&1 || error_exit "Failed to start Redis"
+                fi
+                print_success "Redis cache configured successfully"
+            elif [ "$TP_VERSION" == "v2.8" ]; then
+                # Configure Memcached for v2.8
+                print_info "Configuring Memcached cache for v2.8..."
+                sed -i "s/'bb_cache' => \['file'\]/'bb_cache' => ['memcached']/g" "$TORRENTPIER_PATH/library/config.php"
+                sed -i "s/'bb_config' => \['file'\]/'bb_config' => ['memcached']/g" "$TORRENTPIER_PATH/library/config.php"
+                sed -i "s/'tr_cache' => \['file'\]/'tr_cache' => ['memcached']/g" "$TORRENTPIER_PATH/library/config.php"
+                sed -i "s/'session_cache' => \['file'\]/'session_cache' => ['memcached']/g" "$TORRENTPIER_PATH/library/config.php"
+                sed -i "s/'bb_cap_sid' => \['file'\]/'bb_cap_sid' => ['memcached']/g" "$TORRENTPIER_PATH/library/config.php"
+                sed -i "s/'bb_login_err' => \['file'\]/'bb_login_err' => ['memcached']/g" "$TORRENTPIER_PATH/library/config.php"
+                sed -i "s/'bb_poll_data' => \['file'\]/'bb_poll_data' => ['memcached']/g" "$TORRENTPIER_PATH/library/config.php"
+                sed -i "s/'bb_ip2countries' => \['file'\]/'bb_ip2countries' => ['memcached']/g" "$TORRENTPIER_PATH/library/config.php"
+                sed -i "s/\$bb_cfg\['datastore_type'\] = 'file'/\$bb_cfg['datastore_type'] = 'memcached'/g" "$TORRENTPIER_PATH/library/config.php"
+                
+                # Ensure Memcached is running
+                if ! systemctl is-active --quiet memcached 2>/dev/null; then
+                    print_info "Starting Memcached..."
+                    systemctl enable memcached >> "$logsInst" 2>&1 || true
+                    systemctl start memcached >> "$logsInst" 2>&1 || error_exit "Failed to start Memcached"
+                fi
+                print_success "Memcached cache configured successfully"
+            fi
+        else
+            print_warning "Config file not found at $TORRENTPIER_PATH/library/config.php"
+        fi
+
         # We set the rights to directories and files
         chown -R www-data:www-data "$TORRENTPIER_PATH" >> "$logsInst" 2>&1
         find "$TORRENTPIER_PATH" -type f -exec chmod 644 {} \; >> "$logsInst" 2>&1
@@ -1256,6 +1346,11 @@ EOF
         echo "-> Web Server: $WEB_SERVER"
         echo "-> PHP Version: $PHP_VERSION"
         echo "-> TorrentPier Version: $TP_VERSION"
+        if [ "$TP_VERSION" == "v2.4" ]; then
+            echo "-> Cache System: Redis"
+        elif [ "$TP_VERSION" == "v2.8" ]; then
+            echo "-> Cache System: Memcached"
+        fi
         echo ""
         echo "================================================"
     } >> "$saveFile"
