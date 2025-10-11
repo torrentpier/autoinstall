@@ -781,11 +781,19 @@ http://$HOST:9090 {
     if [ "$WEB_SERVER" == "caddy" ]; then
         if ! dpkg-query -W -f='${Status}' "caddy" 2>/dev/null | grep -q "install ok installed"; then
             print_info "Adding Caddy repository and installing Caddy..."
-            curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg >> "$logsInst" 2>&1
-            curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list >> "$logsInst" 2>&1
-            apt-get update >> "$logsInst" 2>&1
-            apt-get install -y caddy >> "$logsInst" 2>&1
-            print_success "Caddy installed successfully"
+            curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg >> "$logsInst" 2>&1 || error_exit "Failed to add Caddy GPG key"
+            curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list >> "$logsInst" 2>&1 || error_exit "Failed to add Caddy repository"
+            apt-get update >> "$logsInst" 2>&1 || error_exit "Failed to update package cache"
+            apt-get install -y caddy >> "$logsInst" 2>&1 || error_exit "Failed to install Caddy"
+            
+            # Verify Caddy was installed
+            if dpkg-query -W -f='${Status}' "caddy" 2>/dev/null | grep -q "install ok installed"; then
+                print_success "Caddy installed successfully"
+            else
+                error_exit "Caddy installation verification failed"
+            fi
+        else
+            print_info "Caddy is already installed"
         fi
     fi
 
