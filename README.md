@@ -78,27 +78,6 @@ chmod +x ./autoinstall/deb.install.sh && ./autoinstall/deb.install.sh --webserve
 - **The file with the data after installation:** /root/torrentpier.cfg
 - **Lock file:** /var/lock/torrentpier_install.lock (prevents concurrent installations)
 
-### New Features:
-- ✅ **Colored output** - Error messages in red, success in green, warnings in yellow
-- ✅ **System requirements check** - Validates RAM, disk space, and port availability before installation
-- ✅ **Flexible PHP version** - Choose between PHP 8.2, 8.3, or 8.4
-- ✅ **Dry-run mode** - Test configuration without actual installation (`--dry-run`)
-- ✅ **Lock file protection** - Prevents multiple simultaneous installations
-- ✅ **MariaDB health check** - Automatically starts MariaDB if not running
-- ✅ **Enhanced error handling** - Better error messages and automatic rollback on failure
-- ✅ **Installation timer** - Shows total installation time
-- ✅ **Beautiful final summary** - Structured output with all credentials and next steps
-- ✅ **Post-installation health check** - Validates all services, database, website accessibility
-
-### Recent Improvements (2024-10-10):
-- ✅ **Fixed silent script exit** - Script now properly reports errors during package installation
-- ✅ **Progress tracking** - Shows progress for each package installation (e.g., [2/15] Installing package...)
-- ✅ **System diagnostics** - Outputs system information (OS, kernel, architecture) at startup
-- ✅ **Repository validation** - Checks package availability before installation
-- ✅ **Enhanced logging** - Detailed APT error logging for better troubleshooting
-- ✅ **Automatic error recovery** - Attempts to fix broken packages and retry installation
-- ✅ **Better PHP-FPM handling** - Improved error handling and status reporting for PHP-FPM
-
 ### Troubleshooting:
 If you encounter any issues during installation:
 
@@ -112,51 +91,17 @@ If you encounter any issues during installation:
    - PHP-FPM won't start → Check `sudo systemctl status php8.4-fpm`
    - Ports occupied → Use `sudo ss -tulpn | grep ':80\|:443\|:9090'`
 
-3. **See the complete troubleshooting guide:** [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
-
-4. **View changelog:** [CHANGELOG.md](CHANGELOG.md)
-
-### Post-Installation Health Check:
-After installation completes, an automatic health check validates:
-- 🌐 Web server status (nginx/apache/caddy)
-- 🐘 PHP-FPM service
-- 🗄️ MariaDB/MySQL service
-- 🌍 Website accessibility (HTTP/HTTPS)
-- 💾 phpMyAdmin accessibility
-- 🔗 Database connection
-- 📁 TorrentPier files presence
-- 📦 Composer dependencies
-- ⏰ Cron job configuration
-- 🔒 File permissions
-
 ### Configuration file locations:
 **NGINX:**
 - phpMyAdmin config: `/etc/nginx/sites-available/00-phpmyadmin.conf`
 - TorrentPier config: `/etc/nginx/sites-available/01-torrentpier.conf`
-- Example config: `examples/nginx.conf`
 
 **Apache:**
 - phpMyAdmin config: `/etc/apache2/sites-available/00-phpmyadmin.conf`
 - TorrentPier config: `/etc/apache2/sites-available/01-torrentpier.conf`
-- Example config: `examples/apache.conf`
 
 **Caddy:**
 - Main config: `/etc/caddy/Caddyfile`
-- Example config: `examples/caddy.conf`
-
-### Security features:
-
-**NGINX and Caddy configurations include:**
-- **Directory blocking:** Prevents access to `/install/`, `/internal_data/`, `/library/`
-- **Hidden files protection:** Blocks access to `.ht*`, `.en*`, `.git/`
-- **File type restrictions:** Denies access to `.sql`, `.tpl`, `.db`, `.inc`, `.log`, `.md` files
-- **Sitemap redirect:** Automatically redirects `/sitemap.xml` to `/sitemap/sitemap.xml`
-- **Gzip/Zstd compression:** Reduces bandwidth usage (Caddy)
-- **UTF-8 charset:** Proper charset headers for HTML, CSS, JS, JSON, XML, TXT files (Caddy)
-
-**Apache configuration:**
-- Minimal setup with `AllowOverride All` enabled
-- TorrentPier's `.htaccess` file handles all security rules automatically
 
 ## Removing phpMyAdmin public access:
 
