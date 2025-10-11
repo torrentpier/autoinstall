@@ -206,94 +206,94 @@ perform_health_check() {
     echo ""
     
     # Check web server
-    echo -n "🌐 Checking web server ($WEB_SERVER)... "
+    echo -n "[Web Server] Checking $WEB_SERVER... "
     local webserver_service="$WEB_SERVER"
     # Apache service is called apache2 on Debian/Ubuntu
     if [ "$WEB_SERVER" = "apache" ]; then
         webserver_service="apache2"
     fi
     if systemctl is-active --quiet "$webserver_service" 2>/dev/null; then
-        echo -e "${GREEN}✓ Running${NC}"
+        echo -e "${GREEN}OK${NC}"
     else
-        echo -e "${RED}✗ Not running${NC}"
+        echo -e "${RED}FAIL${NC}"
         all_ok=false
     fi
     
     # Check PHP-FPM
-    echo -n "🐘 Checking PHP $PHP_VERSION-FPM... "
+    echo -n "[PHP-FPM] Checking PHP $PHP_VERSION-FPM... "
     if systemctl is-active --quiet "php$PHP_VERSION-fpm" 2>/dev/null; then
-        echo -e "${GREEN}✓ Running${NC}"
+        echo -e "${GREEN}OK${NC}"
     else
-        echo -e "${RED}✗ Not running${NC}"
+        echo -e "${RED}FAIL${NC}"
         all_ok=false
     fi
     
     # Check MariaDB
-    echo -n "🗄️  Checking MariaDB... "
+    echo -n "[Database] Checking MariaDB... "
     if systemctl is-active --quiet mariadb 2>/dev/null || systemctl is-active --quiet mysql 2>/dev/null; then
-        echo -e "${GREEN}✓ Running${NC}"
+        echo -e "${GREEN}OK${NC}"
     else
-        echo -e "${RED}✗ Not running${NC}"
+        echo -e "${RED}FAIL${NC}"
         all_ok=false
     fi
     
     # Check website accessibility
-    echo -n "🌍 Checking website accessibility... "
+    echo -n "[Website] Checking accessibility... "
     if curl -sf -o /dev/null -m 10 "$PROTOCOL://$HOST/" 2>/dev/null; then
-        echo -e "${GREEN}✓ Accessible${NC}"
+        echo -e "${GREEN}OK${NC}"
     else
-        echo -e "${YELLOW}⚠ Not accessible (might need DNS or firewall config)${NC}"
+        echo -e "${YELLOW}WARNING (might need DNS or firewall config)${NC}"
     fi
     
     # Check phpMyAdmin
-    echo -n "💾 Checking phpMyAdmin... "
+    echo -n "[phpMyAdmin] Checking accessibility... "
     if curl -sf -o /dev/null -m 10 "$PROTOCOL://$HOST:9090/" 2>/dev/null; then
-        echo -e "${GREEN}✓ Accessible${NC}"
+        echo -e "${GREEN}OK${NC}"
     else
-        echo -e "${YELLOW}⚠ Not accessible${NC}"
+        echo -e "${YELLOW}WARNING${NC}"
     fi
     
     # Check database connection
-    echo -n "🔗 Checking database connection... "
+    echo -n "[DB Connection] Checking connection... "
     if MYSQL_PWD="$passSql" mysql -u "$userSql" -e "SELECT 1;" "$dbSql" &>/dev/null; then
-        echo -e "${GREEN}✓ Connected${NC}"
+        echo -e "${GREEN}OK${NC}"
     else
-        echo -e "${RED}✗ Connection failed${NC}"
+        echo -e "${RED}FAIL${NC}"
         all_ok=false
     fi
     
     # Check TorrentPier files
-    echo -n "📁 Checking TorrentPier files... "
+    echo -n "[Files] Checking TorrentPier files... "
     if [ -f "$TORRENTPIER_PATH/index.php" ] && [ -f "$TORRENTPIER_PATH/.env" ]; then
-        echo -e "${GREEN}✓ Present${NC}"
+        echo -e "${GREEN}OK${NC}"
     else
-        echo -e "${RED}✗ Missing files${NC}"
+        echo -e "${RED}FAIL${NC}"
         all_ok=false
     fi
     
     # Check vendor directory
-    echo -n "📦 Checking Composer dependencies... "
+    echo -n "[Dependencies] Checking Composer... "
     if [ -d "$TORRENTPIER_PATH/vendor" ] && [ -f "$TORRENTPIER_PATH/vendor/autoload.php" ]; then
-        echo -e "${GREEN}✓ Installed${NC}"
+        echo -e "${GREEN}OK${NC}"
     else
-        echo -e "${RED}✗ Not installed${NC}"
+        echo -e "${RED}FAIL${NC}"
         all_ok=false
     fi
     
     # Check cron job
-    echo -n "⏰ Checking cron job... "
+    echo -n "[Cron] Checking cron job... "
     if crontab -l 2>/dev/null | grep -q "$TORRENTPIER_PATH/cron.php"; then
-        echo -e "${GREEN}✓ Configured${NC}"
+        echo -e "${GREEN}OK${NC}"
     else
-        echo -e "${YELLOW}⚠ Not configured${NC}"
+        echo -e "${YELLOW}WARNING${NC}"
     fi
     
     # Check file permissions
-    echo -n "🔒 Checking file permissions... "
+    echo -n "[Permissions] Checking file permissions... "
     if [ "$(stat -c '%U' "$TORRENTPIER_PATH")" = "www-data" ]; then
-        echo -e "${GREEN}✓ Correct${NC}"
+        echo -e "${GREEN}OK${NC}"
     else
-        echo -e "${YELLOW}⚠ Incorrect owner${NC}"
+        echo -e "${YELLOW}WARNING${NC}"
     fi
     
     echo ""
