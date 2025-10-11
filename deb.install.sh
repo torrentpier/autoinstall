@@ -800,9 +800,13 @@ http://$HOST:9090 {
     # Temporarily disable error trap for package installation
     trap - ERR
     
+    print_info "Starting package installation phase..."
+    
     # Calculate total packages for progress tracking
     total_packages=${#pkgsList[@]}
     current_package=0
+    
+    print_info "Total packages to install: $total_packages"
     
     # Package installation cycle
     for package in "${pkgsList[@]}"; do
