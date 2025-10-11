@@ -59,6 +59,7 @@ SSL_ENABLE="auto"
 SSL_EMAIL=""
 PHP_VERSION="8.4"
 DRY_RUN=false
+MANTICORE_ENABLE="auto"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -83,6 +84,10 @@ while [[ $# -gt 0 ]]; do
             SSL_EMAIL="$2"
             shift 2
             ;;
+        --manticore)
+            MANTICORE_ENABLE="$2"
+            shift 2
+            ;;
         --dry-run)
             DRY_RUN=true
             shift
@@ -96,6 +101,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --php-version <8.2|8.3|8.4>        Choose PHP version (default: 8.4)"
             echo "  --ssl <auto|yes|no>                Enable SSL/TLS (default: auto - only for domains)"
             echo "  --email <email@example.com>        Email for SSL certificate (required if domain is used)"
+            echo "  --manticore <auto|yes|no>          Enable Manticore Search for v2.8 (default: auto - only if RAM >= 4GB)"
             echo "  --dry-run                          Test mode - check requirements without installing"
             echo "  --help                             Show this help message"
             echo ""
@@ -130,6 +136,12 @@ fi
 # Validate PHP version choice
 if [[ ! "$PHP_VERSION" =~ ^(8\.2|8\.3|8\.4)$ ]]; then
     echo "Error: Invalid PHP version. Choose: 8.2, 8.3, or 8.4"
+    exit 1
+fi
+
+# Validate Manticore choice
+if [[ ! "$MANTICORE_ENABLE" =~ ^(auto|yes|no)$ ]]; then
+    echo "Error: Invalid Manticore option. Choose: auto, yes, or no"
     exit 1
 fi
 
@@ -261,6 +273,17 @@ perform_health_check() {
             echo -e "${RED}FAIL${NC}"
             all_ok=false
         fi
+        
+        # Check Manticore Search if installed
+        if [ "$INSTALL_MANTICORE" = true ]; then
+            echo -n "[Search] Checking Manticore Search... "
+            if systemctl is-active --quiet manticore 2>/dev/null; then
+                echo -e "${GREEN}OK${NC}"
+            else
+                echo -e "${RED}FAIL${NC}"
+                all_ok=false
+            fi
+        fi
     fi
 
     # Check website accessibility
@@ -379,6 +402,11 @@ print_final_summary() {
         echo -e "   - Cache System:    ${BLUE}Redis${NC}"
     elif [ "$TP_VERSION" == "v2.8" ]; then
         echo -e "   - Cache System:    ${BLUE}Memcached${NC}"
+        if [ "$INSTALL_MANTICORE" = true ]; then
+            echo -e "   - Search Engine:   ${BLUE}Manticore Search${NC}"
+        else
+            echo -e "   - Search Engine:   ${BLUE}MySQL${NC}"
+        fi
     fi
     [ "$USE_SSL" = true ] && echo -e "   - SSL/TLS:         ${GREEN}Enabled${NC} (${SSL_EMAIL})"
     echo ""
@@ -408,6 +436,16 @@ check_ram() {
         error_exit "Insufficient RAM. Required: ${min_ram}MB, Available: ${available_ram}MB"
     fi
     print_success "RAM check passed: ${available_ram}MB available"
+}
+
+check_ram_for_manticore() {
+    local min_ram=4096 # MB (4 GB)
+    local available_ram=$(free -m | awk '/^Mem:/{print $2}')
+
+    if [ "$available_ram" -lt "$min_ram" ]; then
+        return 1
+    fi
+    return 0
 }
 
 check_disk_space() {
@@ -469,6 +507,26 @@ if $foundOs; then
     check_ram
     check_disk_space
     check_ports
+    
+    # Check RAM for Manticore if needed
+    INSTALL_MANTICORE=false
+    if [ "$TP_VERSION" == "v2.8" ]; then
+        if [ "$MANTICORE_ENABLE" == "yes" ]; then
+            if check_ram_for_manticore; then
+                INSTALL_MANTICORE=true
+                print_success "RAM check for Manticore passed (>= 4GB)"
+            else
+                error_exit "Insufficient RAM for Manticore. Required: 4GB, Available: $(free -m | awk '/^Mem:/{print $2}')MB"
+            fi
+        elif [ "$MANTICORE_ENABLE" == "auto" ]; then
+            if check_ram_for_manticore; then
+                INSTALL_MANTICORE=true
+                print_success "RAM check for Manticore passed (>= 4GB) - Manticore will be installed"
+            else
+                print_warning "RAM less than 4GB - Manticore will not be installed (using MySQL for search)"
+            fi
+        fi
+    fi
     echo ""
 
     # Dry-run mode - show what would be installed and exit
@@ -493,6 +551,9 @@ if $foundOs; then
             echo "  - redis-server php$PHP_VERSION-redis (for v2.4 cache)"
         elif [ "$TP_VERSION" == "v2.8" ]; then
             echo "  - memcached php$PHP_VERSION-memcached (for v2.8 cache)"
+            if [ "$INSTALL_MANTICORE" = true ]; then
+                echo "  - manticore manticore-dev (for v2.8 search engine)"
+            fi
         fi
         # Certbot is only needed for nginx/apache with SSL enabled
         if [[ "$WEB_SERVER" != "caddy" ]] && [[ "$SSL_ENABLE" =~ ^(auto|yes)$ ]]; then
@@ -817,6 +878,18 @@ http://$HOST:9090 {
         print_info "PHP PPA repository already exists"
     fi
 
+    # Add Manticore Search repository if needed
+    if [ "$INSTALL_MANTICORE" = true ]; then
+        print_info "Adding Manticore Search repository..."
+        wget -qO - https://repo.manticoresearch.com/GPG-KEY-manticore >> "$logsInst" 2>&1 | apt-key add - >> "$logsInst" 2>&1 || true
+        if [ ! -f /etc/apt/sources.list.d/manticore.list ]; then
+            echo "deb https://repo.manticoresearch.com/manticore-repo/deb generic main" | tee /etc/apt/sources.list.d/manticore.list >> "$logsInst" 2>&1
+            print_success "Manticore Search repository added"
+        else
+            print_info "Manticore Search repository already exists"
+        fi
+    fi
+
     apt-get -y update >> "$logsInst" 2>&1
 
     # Log available PHP packages for diagnostics
@@ -827,6 +900,30 @@ http://$HOST:9090 {
     if ! dpkg-query -W -f='${Status}' "sudo" 2>/dev/null | grep -q "install ok installed"; then
         print_info "sudo not installed. Installation in progress..."
         apt-get install -y sudo >> "$logsInst" 2>&1
+    fi
+
+    # Install Manticore Search if needed
+    if [ "$INSTALL_MANTICORE" = true ]; then
+        if ! dpkg-query -W -f='${Status}' "manticore" 2>/dev/null | grep -q "install ok installed"; then
+            print_info "Installing Manticore Search..."
+            apt-get install -y manticore manticore-dev >> "$logsInst" 2>&1 || error_exit "Failed to install Manticore Search"
+            
+            # Enable and start Manticore
+            systemctl enable manticore >> "$logsInst" 2>&1 || true
+            systemctl start manticore >> "$logsInst" 2>&1 || error_exit "Failed to start Manticore"
+            
+            if dpkg-query -W -f='${Status}' "manticore" 2>/dev/null | grep -q "install ok installed"; then
+                print_success "Manticore Search installed successfully"
+            else
+                error_exit "Manticore Search installation verification failed"
+            fi
+        else
+            print_info "Manticore Search is already installed"
+            systemctl enable manticore >> "$logsInst" 2>&1 || true
+            if ! systemctl is-active --quiet manticore 2>/dev/null; then
+                systemctl start manticore >> "$logsInst" 2>&1 || error_exit "Failed to start Manticore"
+            fi
+        fi
     fi
 
     # Install Caddy repository and package if needed
@@ -1103,8 +1200,8 @@ EOF
             print_success "Database migrations completed successfully"
         fi
 
-        # Configure cache system in library/config.php
-        print_info "Configuring cache system..."
+        # Configure cache system and search engine in library/config.php
+        print_info "Configuring cache system and search engine..."
         if [ -f "$TORRENTPIER_PATH/library/config.php" ]; then
             if [ "$TP_VERSION" == "v2.4" ]; then
                 # Configure Redis for v2.4
@@ -1146,6 +1243,43 @@ EOF
                     systemctl start memcached >> "$logsInst" 2>&1 || error_exit "Failed to start Memcached"
                 fi
                 print_success "Memcached cache configured successfully"
+                
+                # Configure Manticore Search if installed
+                if [ "$INSTALL_MANTICORE" = true ]; then
+                    print_info "Configuring Manticore Search for v2.8..."
+                    
+                    # Update search engine configuration
+                    sed -i "s/\$bb_cfg\['search_engine_type'\] = 'mysql'/\$bb_cfg['search_engine_type'] = 'manticore'/g" "$TORRENTPIER_PATH/library/config.php"
+                    
+                    # Add Manticore configuration if not exists
+                    if ! grep -q "manticore_host" "$TORRENTPIER_PATH/library/config.php"; then
+                        # Find the line with search_engine_type and add Manticore config after it
+                        sed -i "/\$bb_cfg\['search_engine_type'\]/a\\
+\\
+// Manticore Search configuration\\
+\$bb_cfg['manticore_host'] = '127.0.0.1';\\
+\$bb_cfg['manticore_port'] = 9306;\\
+\$bb_cfg['search_fallback_to_mysql'] = true;" "$TORRENTPIER_PATH/library/config.php"
+                    else
+                        # Update existing configuration
+                        sed -i "s/\$bb_cfg\['manticore_host'\] = .*/\$bb_cfg['manticore_host'] = '127.0.0.1';/g" "$TORRENTPIER_PATH/library/config.php"
+                        sed -i "s/\$bb_cfg\['manticore_port'\] = .*/\$bb_cfg['manticore_port'] = 9306;/g" "$TORRENTPIER_PATH/library/config.php"
+                        sed -i "s/\$bb_cfg\['search_fallback_to_mysql'\] = .*/\$bb_cfg['search_fallback_to_mysql'] = true;/g" "$TORRENTPIER_PATH/library/config.php"
+                    fi
+                    
+                    # Ensure Manticore is running
+                    if ! systemctl is-active --quiet manticore 2>/dev/null; then
+                        print_info "Starting Manticore Search..."
+                        systemctl enable manticore >> "$logsInst" 2>&1 || true
+                        systemctl start manticore >> "$logsInst" 2>&1 || error_exit "Failed to start Manticore"
+                    fi
+                    
+                    print_success "Manticore Search configured successfully"
+                else
+                    print_info "Using MySQL for search (Manticore not installed)"
+                    # Ensure search_engine_type is set to mysql
+                    sed -i "s/\$bb_cfg\['search_engine_type'\] = .*/\$bb_cfg['search_engine_type'] = 'mysql';/g" "$TORRENTPIER_PATH/library/config.php"
+                fi
             fi
         else
             print_warning "Config file not found at $TORRENTPIER_PATH/library/config.php"
@@ -1350,6 +1484,11 @@ EOF
             echo "-> Cache System: Redis"
         elif [ "$TP_VERSION" == "v2.8" ]; then
             echo "-> Cache System: Memcached"
+            if [ "$INSTALL_MANTICORE" = true ]; then
+                echo "-> Search Engine: Manticore Search (RT indexes)"
+            else
+                echo "-> Search Engine: MySQL"
+            fi
         fi
         echo ""
         echo "================================================"

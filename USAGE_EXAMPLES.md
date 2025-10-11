@@ -24,6 +24,48 @@
 ./autoinstall/install.sh --webserver nginx --version v2.8
 ```
 
+## Manticore Search Configuration (v2.8 only)
+
+### Automatic Manticore Installation (recommended)
+```bash
+# Manticore will be automatically installed if RAM >= 4GB
+./autoinstall/install.sh --version v2.8
+```
+
+### Force Enable Manticore Search
+```bash
+# Force installation of Manticore Search (requires 4GB+ RAM)
+./autoinstall/install.sh --version v2.8 --manticore yes
+```
+
+### Disable Manticore Search (use MySQL)
+```bash
+# Use MySQL for search instead of Manticore
+./autoinstall/install.sh --version v2.8 --manticore no
+```
+
+> **Note:** Manticore Search requires at least 4GB of RAM. If your system has less RAM, use `--manticore no` to use MySQL for search instead.
+
+### Manticore Search Features:
+- **RT (Real-Time) indexes** - Fast full-text search
+- **Automatic fallback to MySQL** - If Manticore is unavailable, searches will use MySQL
+- **Configuration:**
+  - Host: `127.0.0.1`
+  - Port: `9306` (MySQL protocol)
+  - Config location: `/etc/manticoresearch/manticore.conf`
+  
+### Check Manticore Status:
+```bash
+# Check if Manticore is running
+systemctl status manticore
+
+# View Manticore logs
+journalctl -u manticore -f
+
+# Connect to Manticore via MySQL client
+mysql -h 127.0.0.1 -P 9306
+```
+
 ## SSL/HTTPS Configurations
 
 ### Automatic SSL for domain (recommended)
@@ -76,8 +118,11 @@ Usage: ./autoinstall/deb.install.sh [OPTIONS]
 Options:
   --webserver <nginx|apache|caddy>  Choose web server (default: nginx)
   --version <v2.4|v2.8>              Choose TorrentPier version (default: v2.8)
+  --php-version <8.2|8.3|8.4>        Choose PHP version (default: 8.4)
   --ssl <auto|yes|no>                Enable SSL/TLS (default: auto - only for domains)
   --email <email@example.com>        Email for SSL certificate (required if domain is used)
+  --manticore <auto|yes|no>          Enable Manticore Search for v2.8 (default: auto - only if RAM >= 4GB)
+  --dry-run                          Test mode - check requirements without installing
   --help                             Show this help message
 ```
 
