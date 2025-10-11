@@ -172,19 +172,12 @@ trap cleanup EXIT
 
 # Print system information for diagnostics
 print_system_info() {
-    log_separator
     print_info "System Information:"
-    log_separator
     echo "OS: $(grep ^PRETTY_NAME= /etc/os-release | awk -F= '{print $2}' | tr -d '\"')" | tee -a "$logsInst"
     echo "Kernel: $(uname -r)" | tee -a "$logsInst"
     echo "Architecture: $(dpkg --print-architecture)" | tee -a "$logsInst"
     echo "Date: $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$logsInst"
-    log_separator
     echo ""
-}
-
-log_separator() {
-    echo -e "${BLUE}===================================${NC}" | tee -a "$logsInst"
 }
 
 # Calculate installation time
@@ -209,9 +202,7 @@ perform_health_check() {
     local all_ok=true
     
     echo ""
-    log_separator
     print_info "Performing post-installation health check..."
-    log_separator
     echo ""
     
     # Check web server
@@ -306,7 +297,6 @@ perform_health_check() {
     fi
     
     echo ""
-    log_separator
     
     if [ "$all_ok" = true ]; then
         print_success "Health check passed! All critical services are running."
@@ -314,7 +304,6 @@ perform_health_check() {
         print_warning "Health check completed with warnings. Some services may need attention."
     fi
     
-    log_separator
     echo ""
 }
 
@@ -447,14 +436,12 @@ if $foundOs; then
     if [ "$DRY_RUN" = true ]; then
         print_info "DRY-RUN MODE - No actual installation will be performed"
         echo ""
-        log_separator
         print_info "Configuration Summary:"
         echo "  Web Server: $WEB_SERVER"
         echo "  TorrentPier Version: $TP_VERSION"
         echo "  PHP Version: $PHP_VERSION"
         echo "  SSL/TLS: $SSL_ENABLE"
         [ -n "$SSL_EMAIL" ] && echo "  SSL Email: $SSL_EMAIL"
-        log_separator
         echo ""
         print_info "Packages to be installed:"
         echo "  - php$PHP_VERSION-fpm php$PHP_VERSION-mbstring php$PHP_VERSION-bcmath"
@@ -547,18 +534,14 @@ if $foundOs; then
                 done
             fi
             
-            log_separator
             print_success "SSL will be automatically configured for domain: $HOST"
             print_info "Email for certificates: $SSL_EMAIL"
-            log_separator
         fi
     else
         # It's an IP address
         if [ "$SSL_ENABLE" = "yes" ]; then
-            log_separator
             print_warning "SSL cannot be automatically configured for IP addresses."
             print_warning "SSL will be disabled."
-            log_separator
         fi
         USE_SSL=false
     fi
@@ -759,23 +742,17 @@ http://$HOST:9090 {
 
     # Remove old sury.org repository if exists (it's blocked)
     if [ -f /etc/apt/sources.list.d/php.list ]; then
-        log_separator
         print_warning "Removing old blocked php.list repository"
-        log_separator
         rm -f /etc/apt/sources.list.d/php.list >> "$logsInst" 2>&1
     fi
 
     # Updating tables and packages
-    log_separator
     print_info "Updating tables and packages"
-    log_separator
     apt-get -y update >> "$logsInst" 2>&1
     apt-get -y dist-upgrade >> "$logsInst" 2>&1
 
     # Add PHP repository
-    log_separator
     print_info "Adding PHP $PHP_VERSION repository"
-    log_separator
     apt-get install -y lsb-release ca-certificates apt-transport-https software-properties-common >> "$logsInst" 2>&1
     
     # Add Ondřej Surý's PPA for PHP (via Launchpad, more reliable)
@@ -794,18 +771,14 @@ http://$HOST:9090 {
 
     # Check and installation sudo
     if ! dpkg-query -W -f='${Status}' "sudo" 2>/dev/null | grep -q "install ok installed"; then
-        log_separator
         print_info "sudo not installed. Installation in progress..."
-        log_separator
         apt-get install -y sudo >> "$logsInst" 2>&1
     fi
 
     # Install Caddy repository and package if needed
     if [ "$WEB_SERVER" == "caddy" ]; then
         if ! dpkg-query -W -f='${Status}' "caddy" 2>/dev/null | grep -q "install ok installed"; then
-            log_separator
             print_info "Adding Caddy repository and installing Caddy..."
-            log_separator
             curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg >> "$logsInst" 2>&1
             curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list >> "$logsInst" 2>&1
             apt-get update >> "$logsInst" 2>&1
@@ -826,9 +799,7 @@ http://$HOST:9090 {
         ((current_package++))
         # Checking for packages and installing packages
         if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
-            log_separator
             print_info "[$current_package/$total_packages] Installing $package..."
-            log_separator
             
             # Check if package is available in repositories
             if ! apt-cache show "$package" &>/dev/null; then
@@ -902,9 +873,7 @@ http://$HOST:9090 {
     trap 'error_exit "An error occurred on line $LINENO"' ERR
 
     # Configure and start PHP-FPM
-    log_separator
     print_info "Configuring PHP $PHP_VERSION-FPM..."
-    log_separator
     
     # Check if PHP-FPM is installed
     if ! dpkg-query -W -f='${Status}' "php$PHP_VERSION-fpm" 2>/dev/null | grep -q "install ok installed"; then
@@ -936,9 +905,7 @@ http://$HOST:9090 {
 
     # Installation phpMyAdmin
     if ! dpkg-query -W -f='${Status}' "phpmyadmin" 2>/dev/null | grep -q "install ok installed"; then
-        log_separator
         print_info "phpMyAdmin not installed. Installation in progress..."
-        log_separator
 
         debconf-set-selections <<EOF
 phpmyadmin phpmyadmin/dbconfig-install boolean true
@@ -968,26 +935,20 @@ EOF
                 ;;
         esac
     else
-        log_separator
         print_error "phpMyAdmin is already installed on the system. The installation cannot continue."
-        log_separator
         read -rp "Press Enter to complete..."
         exit 1
     fi
 
     # Installation and setting Composer
     if [ ! -f "/usr/local/bin/composer" ]; then
-        log_separator
         print_info "Composer not installed. Installation in progress..."
-        log_separator
         curl -sSL https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer >> "$logsInst" 2>&1
     fi
 
     # Installation TorrentPier
     if [ ! -d "$TORRENTPIER_PATH" ]; then
-        log_separator
         print_info "TorrentPier not installed. Installation in progress..."
-        log_separator
         # Creating a temporary directory
         mkdir -p "$TEMP_PATH" >> "$logsInst" 2>&1
 
@@ -1051,9 +1012,7 @@ EOF
         # Import/Initialize database based on TorrentPier version
         if [ "$TP_VERSION" == "v2.4" ]; then
             # v2.4: Import database from SQL dump
-            log_separator
             print_info "Importing database from SQL dump (v2.4)..."
-            log_separator
             if [ ! -f "$TORRENTPIER_PATH/install/sql/mysql.sql" ]; then
                 error_exit "SQL file not found: $TORRENTPIER_PATH/install/sql/mysql.sql"
             fi
@@ -1061,9 +1020,7 @@ EOF
             print_success "Database imported successfully"
         elif [ "$TP_VERSION" == "v2.8" ]; then
             # v2.8: Run Phinx migrations
-            log_separator
             print_info "Running Phinx migrations (v2.8)..."
-            log_separator
             cd "$TORRENTPIER_PATH" || error_exit "Failed to change directory to $TORRENTPIER_PATH"
             php vendor/bin/phinx migrate --configuration=phinx.php >> "$logsInst" 2>&1 || error_exit "Failed to run Phinx migrations"
             print_success "Database migrations completed successfully"
@@ -1075,9 +1032,7 @@ EOF
         find "$TORRENTPIER_PATH" -type d -exec chmod 755 {} \; >> "$logsInst" 2>&1
 
         # Setting the CRON task
-        log_separator
         print_info "Setting up CRON task for TorrentPier..."
-        log_separator
         if ! crontab -l 2>/dev/null | grep -q "$TORRENTPIER_PATH/cron.php"; then
             (crontab -l 2>/dev/null; echo "*/10 * * * * sudo -u www-data php $TORRENTPIER_PATH/cron.php") | crontab - >> "$logsInst" 2>&1
             print_success "CRON task configured successfully"
@@ -1085,9 +1040,7 @@ EOF
             print_info "CRON task already configured"
         fi
     else
-        log_separator
         print_error "TorrentPier is already installed on the system. The installation cannot continue."
-        log_separator
         read -rp "Press Enter to complete..."
         exit 1
     fi
@@ -1096,9 +1049,7 @@ EOF
     case "$WEB_SERVER" in
         nginx)
             if dpkg-query -W -f='${Status}' "nginx" 2>/dev/null | grep -q "install ok installed"; then
-                log_separator
                 print_info "NGINX is not configured. The setup in progress..."
-                log_separator
                 # We remove the default one and create the TorrentPier config
                 rm /etc/nginx/sites-enabled/default >> "$logsInst" 2>&1
                 echo -e "$nginx_torrentpier" | tee /etc/nginx/sites-available/01-torrentpier.conf >> "$logsInst" 2>&1
@@ -1110,9 +1061,7 @@ EOF
 
                 # Setup SSL if enabled
                 if [ "$USE_SSL" = true ]; then
-                    log_separator
                     print_info "Obtaining SSL certificate for NGINX..."
-                    log_separator
                     certbot --nginx -d "$HOST" --non-interactive --agree-tos --email "$SSL_EMAIL" --redirect >> "$logsInst" 2>&1
                     
                     # Setup auto-renewal
@@ -1121,18 +1070,14 @@ EOF
                     fi
                 fi
             else
-                log_separator
                 print_error "NGINX is not installed. The installation cannot continue."
-                log_separator
                 read -rp "Press Enter to complete..."
                 exit 1
             fi
             ;;
         apache)
             if dpkg-query -W -f='${Status}' "apache2" 2>/dev/null | grep -q "install ok installed"; then
-                log_separator
                 print_info "Apache is not configured. The setup in progress..."
-                log_separator
                 # Enable required modules
                 a2enmod proxy_fcgi setenvif rewrite ssl >> "$logsInst" 2>&1
                 a2enconf php$PHP_VERSION-fpm >> "$logsInst" 2>&1
@@ -1153,9 +1098,7 @@ EOF
 
                 # Setup SSL if enabled
                 if [ "$USE_SSL" = true ]; then
-                    log_separator
                     print_info "Obtaining SSL certificate for Apache..."
-                    log_separator
                     certbot --apache -d "$HOST" --non-interactive --agree-tos --email "$SSL_EMAIL" --redirect >> "$logsInst" 2>&1
                     
                     # Setup auto-renewal
@@ -1164,18 +1107,14 @@ EOF
                     fi
                 fi
             else
-                log_separator
                 print_error "Apache is not installed. The installation cannot continue."
-                log_separator
                 read -rp "Press Enter to complete..."
                 exit 1
             fi
             ;;
         caddy)
             if dpkg-query -W -f='${Status}' "caddy" 2>/dev/null | grep -q "install ok installed"; then
-                log_separator
                 print_info "Caddy is not configured. The setup in progress..."
-                log_separator
                 # Create Caddy config
                 echo -e "$caddy_config" | tee /etc/caddy/Caddyfile >> "$logsInst" 2>&1
 
@@ -1184,15 +1123,11 @@ EOF
 
                 # Inform about automatic SSL
                 if [ "$USE_SSL" = true ]; then
-                    log_separator
                     print_info "Caddy will automatically obtain SSL certificate for: $HOST"
                     print_info "This may take a few moments on first access..."
-                    log_separator
                 fi
             else
-                log_separator
                 print_error "Caddy is not installed. The installation cannot continue."
-                log_separator
                 read -rp "Press Enter to complete..."
                 exit 1
             fi
