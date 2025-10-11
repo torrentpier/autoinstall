@@ -23,19 +23,23 @@ NC='\033[0m' # No Color
 
 # Color output functions
 print_error() {
-    echo -e "${RED}[ERROR]${NC} $1" | tee -a "$logsInst" >&2
+    echo -e "${RED}[ERROR]${NC} $1" >&2
+    echo "[ERROR] $1" >> "$logsInst" 2>&1
 }
 
 print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1" | tee -a "$logsInst"
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    echo "[SUCCESS] $1" >> "$logsInst" 2>&1
 }
 
 print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1" | tee -a "$logsInst"
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+    echo "[WARNING] $1" >> "$logsInst" 2>&1
 }
 
 print_info() {
-    echo -e "${BLUE}[INFO]${NC} $1" | tee -a "$logsInst"
+    echo -e "${BLUE}[INFO]${NC} $1"
+    echo "[INFO] $1" >> "$logsInst" 2>&1
 }
 
 # Error handler
@@ -138,7 +142,6 @@ saveFile="/root/torrentpier.cfg"
 # Installation paths
 TORRENTPIER_PATH="/var/www/torrentpier"
 TEMP_PATH="/tmp/torrentpier"
-PHPMYADMIN_PATH="/usr/share/phpmyadmin"
 LOCK_FILE="/var/lock/torrentpier_install.lock"
 
 # TorrentPier auth (default credentials)
@@ -171,13 +174,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Logging function (default to info)
-log_message() {
-    print_info "$1"
-}
-
-log_separator() {
-    echo -e "${BLUE}===================================${NC}" | tee -a "$logsInst"
+# Print system information for diagnostics
+print_system_info() {
+    print_info "System Information:"
+    echo "OS: $(grep ^PRETTY_NAME= /etc/os-release | awk -F= '{print $2}' | tr -d '\"')" | tee -a "$logsInst"
+    echo "Kernel: $(uname -r)" | tee -a "$logsInst"
+    echo "Architecture: $(dpkg --print-architecture)" | tee -a "$logsInst"
+    echo "Date: $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$logsInst"
+    echo ""
 }
 
 # Calculate installation time
@@ -202,104 +206,101 @@ perform_health_check() {
     local all_ok=true
     
     echo ""
-    log_separator
     print_info "Performing post-installation health check..."
-    log_separator
     echo ""
     
     # Check web server
-    echo -n "🌐 Checking web server ($WEB_SERVER)... "
+    echo -n "[Web Server] Checking $WEB_SERVER... "
     local webserver_service="$WEB_SERVER"
     # Apache service is called apache2 on Debian/Ubuntu
     if [ "$WEB_SERVER" = "apache" ]; then
         webserver_service="apache2"
     fi
     if systemctl is-active --quiet "$webserver_service" 2>/dev/null; then
-        echo -e "${GREEN}✓ Running${NC}"
+        echo -e "${GREEN}OK${NC}"
     else
-        echo -e "${RED}✗ Not running${NC}"
+        echo -e "${RED}FAIL${NC}"
         all_ok=false
     fi
     
     # Check PHP-FPM
-    echo -n "🐘 Checking PHP $PHP_VERSION-FPM... "
+    echo -n "[PHP-FPM] Checking PHP $PHP_VERSION-FPM... "
     if systemctl is-active --quiet "php$PHP_VERSION-fpm" 2>/dev/null; then
-        echo -e "${GREEN}✓ Running${NC}"
+        echo -e "${GREEN}OK${NC}"
     else
-        echo -e "${RED}✗ Not running${NC}"
+        echo -e "${RED}FAIL${NC}"
         all_ok=false
     fi
     
     # Check MariaDB
-    echo -n "🗄️  Checking MariaDB... "
+    echo -n "[Database] Checking MariaDB... "
     if systemctl is-active --quiet mariadb 2>/dev/null || systemctl is-active --quiet mysql 2>/dev/null; then
-        echo -e "${GREEN}✓ Running${NC}"
+        echo -e "${GREEN}OK${NC}"
     else
-        echo -e "${RED}✗ Not running${NC}"
+        echo -e "${RED}FAIL${NC}"
         all_ok=false
     fi
     
     # Check website accessibility
-    echo -n "🌍 Checking website accessibility... "
+    echo -n "[Website] Checking accessibility... "
     if curl -sf -o /dev/null -m 10 "$PROTOCOL://$HOST/" 2>/dev/null; then
-        echo -e "${GREEN}✓ Accessible${NC}"
+        echo -e "${GREEN}OK${NC}"
     else
-        echo -e "${YELLOW}⚠ Not accessible (might need DNS or firewall config)${NC}"
+        echo -e "${YELLOW}WARNING (might need DNS or firewall config)${NC}"
     fi
     
     # Check phpMyAdmin
-    echo -n "💾 Checking phpMyAdmin... "
+    echo -n "[phpMyAdmin] Checking accessibility... "
     if curl -sf -o /dev/null -m 10 "$PROTOCOL://$HOST:9090/" 2>/dev/null; then
-        echo -e "${GREEN}✓ Accessible${NC}"
+        echo -e "${GREEN}OK${NC}"
     else
-        echo -e "${YELLOW}⚠ Not accessible${NC}"
+        echo -e "${YELLOW}WARNING${NC}"
     fi
     
     # Check database connection
-    echo -n "🔗 Checking database connection... "
+    echo -n "[DB Connection] Checking connection... "
     if MYSQL_PWD="$passSql" mysql -u "$userSql" -e "SELECT 1;" "$dbSql" &>/dev/null; then
-        echo -e "${GREEN}✓ Connected${NC}"
+        echo -e "${GREEN}OK${NC}"
     else
-        echo -e "${RED}✗ Connection failed${NC}"
+        echo -e "${RED}FAIL${NC}"
         all_ok=false
     fi
     
     # Check TorrentPier files
-    echo -n "📁 Checking TorrentPier files... "
+    echo -n "[Files] Checking TorrentPier files... "
     if [ -f "$TORRENTPIER_PATH/index.php" ] && [ -f "$TORRENTPIER_PATH/.env" ]; then
-        echo -e "${GREEN}✓ Present${NC}"
+        echo -e "${GREEN}OK${NC}"
     else
-        echo -e "${RED}✗ Missing files${NC}"
+        echo -e "${RED}FAIL${NC}"
         all_ok=false
     fi
     
     # Check vendor directory
-    echo -n "📦 Checking Composer dependencies... "
+    echo -n "[Dependencies] Checking Composer... "
     if [ -d "$TORRENTPIER_PATH/vendor" ] && [ -f "$TORRENTPIER_PATH/vendor/autoload.php" ]; then
-        echo -e "${GREEN}✓ Installed${NC}"
+        echo -e "${GREEN}OK${NC}"
     else
-        echo -e "${RED}✗ Not installed${NC}"
+        echo -e "${RED}FAIL${NC}"
         all_ok=false
     fi
     
     # Check cron job
-    echo -n "⏰ Checking cron job... "
+    echo -n "[Cron] Checking cron job... "
     if crontab -l 2>/dev/null | grep -q "$TORRENTPIER_PATH/cron.php"; then
-        echo -e "${GREEN}✓ Configured${NC}"
+        echo -e "${GREEN}OK${NC}"
     else
-        echo -e "${YELLOW}⚠ Not configured${NC}"
+        echo -e "${YELLOW}WARNING${NC}"
     fi
     
     # Check file permissions
-    echo -n "🔒 Checking file permissions... "
+    echo -n "[Permissions] Checking file permissions... "
     if [ "$(stat -c '%U' "$TORRENTPIER_PATH")" = "www-data" ]; then
-        echo -e "${GREEN}✓ Correct${NC}"
+        echo -e "${GREEN}OK${NC}"
     else
-        echo -e "${YELLOW}⚠ Incorrect owner${NC}"
+        echo -e "${YELLOW}WARNING${NC}"
     fi
     
     echo ""
-    log_separator
     
     if [ "$all_ok" = true ]; then
         print_success "Health check passed! All critical services are running."
@@ -307,7 +308,6 @@ perform_health_check() {
         print_warning "Health check completed with warnings. Some services may need attention."
     fi
     
-    log_separator
     echo ""
 }
 
@@ -316,51 +316,49 @@ print_final_summary() {
     local install_time=$(calculate_time)
     
     echo ""
-    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║                                                              ║${NC}"
-    echo -e "${GREEN}║          🎉 TorrentPier Installation Complete! 🎉           ║${NC}"
-    echo -e "${GREEN}║                                                              ║${NC}"
-    echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo -e "${GREEN}================================================================${NC}"
+    echo -e "${GREEN}              TorrentPier Installation Complete!               ${NC}"
+    echo -e "${GREEN}================================================================${NC}"
     echo ""
-    echo -e "${BLUE}⏱️  Installation Time:${NC} $install_time"
+    echo -e "${BLUE}Installation Time:${NC} $install_time"
     echo ""
-    echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${BLUE}║ 📋 INSTALLATION SUMMARY                                      ║${NC}"
-    echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo -e "${BLUE}================================================================${NC}"
+    echo -e "${BLUE} INSTALLATION SUMMARY                                           ${NC}"
+    echo -e "${BLUE}================================================================${NC}"
     echo ""
-    echo -e "${YELLOW}🌐 Access Information:${NC}"
-    echo -e "   ${GREEN}➜${NC} TorrentPier URL:    ${BLUE}$PROTOCOL://$HOST/${NC}"
-    echo -e "   ${GREEN}➜${NC} phpMyAdmin URL:     ${BLUE}$PROTOCOL://$HOST:9090/${NC}"
+    echo -e "${YELLOW}Access Information:${NC}"
+    echo -e "   - TorrentPier URL:    ${BLUE}$PROTOCOL://$HOST/${NC}"
+    echo -e "   - phpMyAdmin URL:     ${BLUE}$PROTOCOL://$HOST:9090/${NC}"
     echo ""
-    echo -e "${YELLOW}🔐 TorrentPier Credentials:${NC}"
-    echo -e "   ${GREEN}➜${NC} Username:  ${BLUE}$torrentPierUser${NC}"
-    echo -e "   ${GREEN}➜${NC} Password:  ${BLUE}$torrentPierPass${NC}"
+    echo -e "${YELLOW}TorrentPier Credentials:${NC}"
+    echo -e "   - Username:  ${BLUE}$torrentPierUser${NC}"
+    echo -e "   - Password:  ${BLUE}$torrentPierPass${NC}"
     echo ""
-    echo -e "${YELLOW}🗄️  Database Information:${NC}"
-    echo -e "   ${GREEN}➜${NC} Database:  ${BLUE}$dbSql${NC}"
-    echo -e "   ${GREEN}➜${NC} Username:  ${BLUE}$userSql${NC}"
-    echo -e "   ${GREEN}➜${NC} Password:  ${BLUE}$passSql${NC}"
+    echo -e "${YELLOW}Database Information:${NC}"
+    echo -e "   - Database:  ${BLUE}$dbSql${NC}"
+    echo -e "   - Username:  ${BLUE}$userSql${NC}"
+    echo -e "   - Password:  ${BLUE}$passSql${NC}"
     echo ""
-    echo -e "${YELLOW}💾 Configuration:${NC}"
-    echo -e "   ${GREEN}➜${NC} Web Server:      ${BLUE}$WEB_SERVER${NC}"
-    echo -e "   ${GREEN}➜${NC} PHP Version:     ${BLUE}$PHP_VERSION${NC}"
-    echo -e "   ${GREEN}➜${NC} TorrentPier:     ${BLUE}$TP_VERSION${NC}"
-    [ "$USE_SSL" = true ] && echo -e "   ${GREEN}➜${NC} SSL/TLS:         ${GREEN}Enabled${NC} (${SSL_EMAIL})"
+    echo -e "${YELLOW}Configuration:${NC}"
+    echo -e "   - Web Server:      ${BLUE}$WEB_SERVER${NC}"
+    echo -e "   - PHP Version:     ${BLUE}$PHP_VERSION${NC}"
+    echo -e "   - TorrentPier:     ${BLUE}$TP_VERSION${NC}"
+    [ "$USE_SSL" = true ] && echo -e "   - SSL/TLS:         ${GREEN}Enabled${NC} (${SSL_EMAIL})"
     echo ""
-    echo -e "${YELLOW}📁 Important Files:${NC}"
-    echo -e "   ${GREEN}➜${NC} Config file:     ${BLUE}$saveFile${NC}"
-    echo -e "   ${GREEN}➜${NC} Install log:     ${BLUE}$logsInst${NC}"
-    echo -e "   ${GREEN}➜${NC} Application:     ${BLUE}$TORRENTPIER_PATH${NC}"
+    echo -e "${YELLOW}Important Files:${NC}"
+    echo -e "   - Config file:     ${BLUE}$saveFile${NC}"
+    echo -e "   - Install log:     ${BLUE}$logsInst${NC}"
+    echo -e "   - Application:     ${BLUE}$TORRENTPIER_PATH${NC}"
     echo ""
-    echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${BLUE}================================================================${NC}"
     echo ""
-    echo -e "${GREEN}✨ Next Steps:${NC}"
-    echo -e "   ${YELLOW}1.${NC} Open your browser: ${BLUE}$PROTOCOL://$HOST/${NC}"
-    echo -e "   ${YELLOW}2.${NC} Login with credentials above"
-    echo -e "   ${YELLOW}3.${NC} ${RED}IMPORTANT:${NC} Change default admin password immediately!"
-    [ "$USE_SSL" = false ] && echo -e "   ${YELLOW}4.${NC} ${YELLOW}Consider enabling SSL for production${NC}"
+    echo -e "${GREEN}Next Steps:${NC}"
+    echo -e "   1. Open your browser: ${BLUE}$PROTOCOL://$HOST/${NC}"
+    echo -e "   2. Login with credentials above"
+    echo -e "   3. ${RED}IMPORTANT:${NC} Change default admin password immediately!"
+    [ "$USE_SSL" = false ] && echo -e "   4. ${YELLOW}Consider enabling SSL for production${NC}"
     echo ""
-    echo -e "${GREEN}🎯 Good luck with your tracker!${NC}"
+    echo -e "${GREEN}Good luck with your tracker!${NC}"
     echo ""
 }
 
@@ -416,21 +414,6 @@ check_ports() {
     fi
 }
 
-check_mariadb() {
-    print_info "Checking MariaDB status..."
-    
-    if ! systemctl is-active --quiet mariadb && ! systemctl is-active --quiet mysql; then
-        print_warning "MariaDB/MySQL is not running. Attempting to start..."
-        if systemctl start mariadb 2>/dev/null || systemctl start mysql 2>/dev/null; then
-            print_success "MariaDB/MySQL started successfully"
-        else
-            error_exit "Failed to start MariaDB/MySQL. Please check the service status."
-        fi
-    else
-        print_success "MariaDB/MySQL is running"
-    fi
-}
-
 # Checking for system support
 foundOs=false
 for os in "${suppOs[@]}"; do
@@ -441,6 +424,9 @@ for os in "${suppOs[@]}"; do
 done
 
 if $foundOs; then
+    # Print system information for diagnostics
+    print_system_info
+    
     # Run system requirements checks
     print_info "Running system requirements checks..."
     check_ram
@@ -452,14 +438,12 @@ if $foundOs; then
     if [ "$DRY_RUN" = true ]; then
         print_info "DRY-RUN MODE - No actual installation will be performed"
         echo ""
-        log_separator
         print_info "Configuration Summary:"
         echo "  Web Server: $WEB_SERVER"
         echo "  TorrentPier Version: $TP_VERSION"
         echo "  PHP Version: $PHP_VERSION"
         echo "  SSL/TLS: $SSL_ENABLE"
         [ -n "$SSL_EMAIL" ] && echo "  SSL Email: $SSL_EMAIL"
-        log_separator
         echo ""
         print_info "Packages to be installed:"
         echo "  - php$PHP_VERSION-fpm php$PHP_VERSION-mbstring php$PHP_VERSION-bcmath"
@@ -467,7 +451,10 @@ if $foundOs; then
         echo "  - php$PHP_VERSION-zip php$PHP_VERSION-gd php$PHP_VERSION-curl php$PHP_VERSION-mysql"
         echo "  - mariadb-server composer"
         echo "  - $WEB_SERVER"
-        [ "$USE_SSL" = true ] && echo "  - certbot python3-certbot-$WEB_SERVER"
+        # Certbot is only needed for nginx/apache with SSL enabled
+        if [[ "$WEB_SERVER" != "caddy" ]] && [[ "$SSL_ENABLE" =~ ^(auto|yes)$ ]]; then
+            echo "  - certbot python3-certbot-$WEB_SERVER (if domain is used)"
+        fi
         echo ""
         print_success "Dry-run completed successfully!"
         print_info "Run without --dry-run to perform actual installation"
@@ -549,18 +536,14 @@ if $foundOs; then
                 done
             fi
             
-            log_separator
             print_success "SSL will be automatically configured for domain: $HOST"
             print_info "Email for certificates: $SSL_EMAIL"
-            log_separator
         fi
     else
         # It's an IP address
         if [ "$SSL_ENABLE" = "yes" ]; then
-            log_separator
             print_warning "SSL cannot be automatically configured for IP addresses."
             print_warning "SSL will be disabled."
-            log_separator
         fi
         USE_SSL=false
     fi
@@ -608,7 +591,7 @@ if $foundOs; then
     listen 9090;
     server_name $HOST;
 
-    root $PHPMYADMIN_PATH;
+    root /usr/share/phpmyadmin;
     index index.php;
 
     location / {
@@ -616,7 +599,7 @@ if $foundOs; then
     }
 
     location ~* ^/(.+\.(jpg|jpeg|gif|css|png|js|ico|html|xml|txt))$ {
-        root $PHPMYADMIN_PATH;
+        root /usr/share/phpmyadmin;
     }
 
     location ~ /\.ht {
@@ -653,9 +636,9 @@ if $foundOs; then
     # Apache configuration file for phpMyAdmin
     apache_phpmyadmin="<VirtualHost *:9090>
     ServerName $HOST
-    DocumentRoot $PHPMYADMIN_PATH
+    DocumentRoot /usr/share/phpmyadmin
 
-    <Directory $PHPMYADMIN_PATH>
+    <Directory /usr/share/phpmyadmin>
         Options -Indexes +FollowSymLinks
         AllowOverride All
         Require all granted
@@ -696,14 +679,15 @@ if $foundOs; then
 }
 
 $HOST:9090 {
-    root * $PHPMYADMIN_PATH
+    root * /usr/share/phpmyadmin
     encode gzip zstd
     php_fastcgi unix:/run/php/php$PHP_VERSION-fpm.sock
     file_server
     tls $SSL_EMAIL
 }"
     else
-        caddy_config="$HOST {
+        # For IP addresses or when SSL is disabled, use http:// prefix to prevent automatic HTTPS
+        caddy_config="http://$HOST {
         root * $TORRENTPIER_PATH
     encode gzip zstd
     php_fastcgi unix:/run/php/php$PHP_VERSION-fpm.sock
@@ -726,8 +710,8 @@ $HOST:9090 {
     header @html_css_js Content-Type \"{mime}; charset=utf-8\"
 }
 
-$HOST:9090 {
-    root * $PHPMYADMIN_PATH
+http://$HOST:9090 {
+    root * /usr/share/phpmyadmin
     encode gzip zstd
     php_fastcgi unix:/run/php/php$PHP_VERSION-fpm.sock
     file_server
@@ -760,23 +744,17 @@ $HOST:9090 {
 
     # Remove old sury.org repository if exists (it's blocked)
     if [ -f /etc/apt/sources.list.d/php.list ]; then
-        log_separator
         print_warning "Removing old blocked php.list repository"
-        log_separator
         rm -f /etc/apt/sources.list.d/php.list >> "$logsInst" 2>&1
     fi
 
     # Updating tables and packages
-    log_separator
-    log_message "Updating tables and packages"
-    log_separator
+    print_info "Updating tables and packages"
     apt-get -y update >> "$logsInst" 2>&1
     apt-get -y dist-upgrade >> "$logsInst" 2>&1
 
     # Add PHP repository
-    log_separator
-    log_message "Adding PHP $PHP_VERSION repository"
-    log_separator
+    print_info "Adding PHP $PHP_VERSION repository"
     apt-get install -y lsb-release ca-certificates apt-transport-https software-properties-common >> "$logsInst" 2>&1
     
     # Add Ondřej Surý's PPA for PHP (via Launchpad, more reliable)
@@ -788,37 +766,54 @@ $HOST:9090 {
     fi
     
     apt-get -y update >> "$logsInst" 2>&1
+    
+    # Log available PHP packages for diagnostics
+    echo "Available PHP $PHP_VERSION packages:" >> "$logsInst"
+    apt-cache search "php$PHP_VERSION" | grep "^php$PHP_VERSION" | head -20 >> "$logsInst" 2>&1 || true
 
     # Check and installation sudo
     if ! dpkg-query -W -f='${Status}' "sudo" 2>/dev/null | grep -q "install ok installed"; then
-        log_separator
-        log_message "sudo not installed. Installation in progress..."
-        log_separator
+        print_info "sudo not installed. Installation in progress..."
         apt-get install -y sudo >> "$logsInst" 2>&1
     fi
 
-    # Install Caddy repository if needed
+    # Install Caddy repository and package if needed
     if [ "$WEB_SERVER" == "caddy" ]; then
         if ! dpkg-query -W -f='${Status}' "caddy" 2>/dev/null | grep -q "install ok installed"; then
-            log_separator
-            log_message "Adding Caddy repository..."
-            log_separator
+            print_info "Adding Caddy repository and installing Caddy..."
             curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg >> "$logsInst" 2>&1
             curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list >> "$logsInst" 2>&1
             apt-get update >> "$logsInst" 2>&1
+            apt-get install -y caddy >> "$logsInst" 2>&1
+            print_success "Caddy installed successfully"
         fi
     fi
 
     # Temporarily disable error trap for package installation
     trap - ERR
     
+    # Calculate total packages for progress tracking
+    total_packages=${#pkgsList[@]}
+    current_package=0
+    
     # Package installation cycle
     for package in "${pkgsList[@]}"; do
+        ((current_package++))
         # Checking for packages and installing packages
         if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
-            log_separator
-            log_message "$package not installed. Installation in progress..."
-            log_separator
+            print_info "[$current_package/$total_packages] Installing $package..."
+            
+            # Check if package is available in repositories
+            if ! apt-cache show "$package" &>/dev/null; then
+                print_warning "Package $package is not available in repositories"
+                print_info "Updating package cache and retrying..."
+                apt-get update >> "$logsInst" 2>&1 || true
+                
+                if ! apt-cache show "$package" &>/dev/null; then
+                    trap 'error_exit "An error occurred on line $LINENO"' ERR
+                    error_exit "Package $package is not available in repositories. Check PHP repository configuration."
+                fi
+            fi
             
             # Special handling for PHP-FPM to avoid startup failures during installation
             if [[ "$package" == php*-fpm ]]; then
@@ -832,64 +827,78 @@ $HOST:9090 {
                     
                     # Verify installation succeeded
                     if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
-                        print_error "Failed to install $package"
+                        trap 'error_exit "An error occurred on line $LINENO"' ERR
+                        error_exit "Failed to install $package. Check log file: $logsInst"
                     fi
                 }
             else
-                apt-get install -y "$package" >> "$logsInst" 2>&1
+                # Install package and check if it succeeded
+                if ! DEBIAN_FRONTEND=noninteractive apt-get install -y "$package" >> "$logsInst" 2>&1; then
+                    print_warning "Installation of $package failed, attempting to fix..."
+                    echo "=== APT Error for $package ===" >> "$logsInst"
+                    DEBIAN_FRONTEND=noninteractive apt-get install -y "$package" 2>&1 | tail -50 >> "$logsInst" || true
+                    echo "=== End of APT Error ===" >> "$logsInst"
+                    
+                    # Try to fix broken packages
+                    dpkg --configure -a >> "$logsInst" 2>&1 || true
+                    apt-get install -y -f >> "$logsInst" 2>&1 || true
+                    
+                    # Retry installation
+                    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y "$package" >> "$logsInst" 2>&1; then
+                        # Verify if package is actually installed despite error
+                        if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
+                            echo "=== Final APT Error for $package ===" >> "$logsInst"
+                            DEBIAN_FRONTEND=noninteractive apt-get install -y "$package" 2>&1 | tail -100 >> "$logsInst" || true
+                            echo "=== End of Final APT Error ===" >> "$logsInst"
+                            trap 'error_exit "An error occurred on line $LINENO"' ERR
+                            error_exit "Failed to install $package after retry. Check log file: $logsInst"
+                        else
+                            print_warning "$package installed but with warnings"
+                        fi
+                    fi
+                fi
             fi
+            
+            # Final verification that package was installed successfully
+            if dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
+                print_success "[$current_package/$total_packages] $package installed successfully"
+            else
+                trap 'error_exit "An error occurred on line $LINENO"' ERR
+                error_exit "Package $package failed to install. Check log file: $logsInst"
+            fi
+        else
+            print_info "[$current_package/$total_packages] $package is already installed"
         fi
     done
     
     # Re-enable error trap
     trap 'error_exit "An error occurred on line $LINENO"' ERR
-    
-    # Install Caddy separately
-    if [ "$WEB_SERVER" == "caddy" ]; then
-        if ! dpkg-query -W -f='${Status}' "caddy" 2>/dev/null | grep -q "install ok installed"; then
-            log_separator
-            log_message "caddy not installed. Installation in progress..."
-            log_separator
-            apt-get install -y caddy >> "$logsInst" 2>&1
-        fi
-    fi
 
-    # Fix and start PHP-FPM if needed
-    log_separator
-    log_message "Configuring PHP $PHP_VERSION-FPM..."
-    log_separator
-    
-    # Temporarily disable error trap
-    trap - ERR
+    # Configure and start PHP-FPM
+    print_info "Configuring PHP $PHP_VERSION-FPM..."
     
     # Check if PHP-FPM is installed
-    if dpkg-query -W -f='${Status}' "php$PHP_VERSION-fpm" 2>/dev/null | grep -q "install ok installed"; then
-        # Try to start PHP-FPM
-        if ! systemctl is-active --quiet "php$PHP_VERSION-fpm" 2>/dev/null; then
-            print_info "PHP-FPM is not running, attempting to start..."
-            systemctl start "php$PHP_VERSION-fpm" 2>/dev/null || {
-                print_warning "Failed to start PHP-FPM via systemctl, trying alternative method..."
-                # Try to fix configuration issues
-                dpkg --configure -a >> "$logsInst" 2>&1 || true
-                # Force reinstall if needed
-                apt-get install --reinstall -y "php$PHP_VERSION-fpm" >> "$logsInst" 2>&1 || true
-                # Try to start again
-                systemctl start "php$PHP_VERSION-fpm" 2>/dev/null || print_warning "PHP-FPM may need manual configuration"
-            }
-        fi
-        
-        # Enable PHP-FPM on boot
-        systemctl enable "php$PHP_VERSION-fpm" 2>/dev/null || true
-        
-        if systemctl is-active --quiet "php$PHP_VERSION-fpm" 2>/dev/null; then
-            print_success "PHP-FPM is running"
-        else
-            print_warning "PHP-FPM installation completed but service is not running. Will continue installation..."
-        fi
+    if ! dpkg-query -W -f='${Status}' "php$PHP_VERSION-fpm" 2>/dev/null | grep -q "install ok installed"; then
+        error_exit "PHP $PHP_VERSION-FPM is not installed. Installation failed."
     fi
     
-    # Re-enable error trap
-    trap 'error_exit "An error occurred on line $LINENO"' ERR
+    # Enable PHP-FPM on boot
+    systemctl enable "php$PHP_VERSION-fpm" >> "$logsInst" 2>&1 || true
+    
+    # Start PHP-FPM if not running
+    if ! systemctl is-active --quiet "php$PHP_VERSION-fpm" 2>/dev/null; then
+        print_info "Starting PHP-FPM service..."
+        if systemctl start "php$PHP_VERSION-fpm" >> "$logsInst" 2>&1; then
+            print_success "PHP-FPM started successfully"
+        else
+            print_warning "Failed to start PHP-FPM, attempting fix..."
+            dpkg --configure -a >> "$logsInst" 2>&1 || true
+            apt-get install --reinstall -y "php$PHP_VERSION-fpm" >> "$logsInst" 2>&1 || true
+            systemctl start "php$PHP_VERSION-fpm" >> "$logsInst" 2>&1 || print_warning "PHP-FPM may need manual configuration"
+        fi
+    else
+        print_success "PHP-FPM is already running"
+    fi
 
     passPma="$(pwgen -1Bs 12)"
     dbSql="torrentpier_$(pwgen -1 8)"
@@ -898,9 +907,7 @@ $HOST:9090 {
 
     # Installation phpMyAdmin
     if ! dpkg-query -W -f='${Status}' "phpmyadmin" 2>/dev/null | grep -q "install ok installed"; then
-        log_separator
-        log_message "phpMyAdmin not installed. Installation in progress..."
-        log_separator
+        print_info "phpMyAdmin not installed. Installation in progress..."
 
         debconf-set-selections <<EOF
 phpmyadmin phpmyadmin/dbconfig-install boolean true
@@ -930,26 +937,20 @@ EOF
                 ;;
         esac
     else
-        log_separator
-        echo "phpMyAdmin is already installed on the system. The installation cannot continue." | tee -a "$logsInst"
-        log_separator
+        print_error "phpMyAdmin is already installed on the system. The installation cannot continue."
         read -rp "Press Enter to complete..."
         exit 1
     fi
 
     # Installation and setting Composer
     if [ ! -f "/usr/local/bin/composer" ]; then
-        log_separator
-        log_message "Composer not installed. Installation in progress..."
-        log_separator
+        print_info "Composer not installed. Installation in progress..."
         curl -sSL https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer >> "$logsInst" 2>&1
     fi
 
     # Installation TorrentPier
     if [ ! -d "$TORRENTPIER_PATH" ]; then
-        log_separator
-        log_message "TorrentPier not installed. Installation in progress..."
-        log_separator
+        print_info "TorrentPier not installed. Installation in progress..."
         # Creating a temporary directory
         mkdir -p "$TEMP_PATH" >> "$logsInst" 2>&1
 
@@ -970,8 +971,8 @@ EOF
         
         mv "$TEMP_PATH"/torrentpier-torrentpier-* "$TORRENTPIER_PATH" >> "$logsInst" 2>&1 || error_exit "Failed to move TorrentPier files"
 
-        # Clearing the temporary folder
-        rm -rf "$TEMP_PATH"/* >> "$logsInst" 2>&1
+        # Remove temporary folder
+        rm -rf "$TEMP_PATH" >> "$logsInst" 2>&1
 
         # Installing composer dependencies
         if [ ! -d "$TORRENTPIER_PATH/vendor" ]; then
@@ -983,14 +984,20 @@ EOF
         fi
 
         # Setting up the configuration file
-        mv "$TORRENTPIER_PATH/.env.example" "$TORRENTPIER_PATH/.env" 2>&1 | tee -a "$logsInst"
+        mv "$TORRENTPIER_PATH/.env.example" "$TORRENTPIER_PATH/.env" >> "$logsInst" 2>&1
         sed -i "s/APP_CRON_ENABLED=true/APP_CRON_ENABLED=false/g" "$TORRENTPIER_PATH/.env" >> "$logsInst" 2>&1
         sed -i "s/DB_DATABASE=torrentpier/DB_DATABASE=$dbSql/g" "$TORRENTPIER_PATH/.env" >> "$logsInst" 2>&1
         sed -i "s/DB_USERNAME=root/DB_USERNAME=$userSql/g" "$TORRENTPIER_PATH/.env" >> "$logsInst" 2>&1
         sed -i "s/DB_PASSWORD=secret/DB_PASSWORD=$passSql/g" "$TORRENTPIER_PATH/.env" >> "$logsInst" 2>&1
 
-        # Check MariaDB before database operations
-        check_mariadb
+        # Check and start MariaDB before database operations
+        if ! systemctl is-active --quiet mariadb 2>/dev/null && ! systemctl is-active --quiet mysql 2>/dev/null; then
+            print_info "MariaDB is not running. Starting..."
+            if ! systemctl start mariadb 2>/dev/null && ! systemctl start mysql 2>/dev/null; then
+                error_exit "Failed to start MariaDB/MySQL. Please check the service status."
+            fi
+            print_success "MariaDB started successfully"
+        fi
 
         # Creating a user
         mysql -e "CREATE USER '$userSql'@'localhost' IDENTIFIED BY '$passSql';" >> "$logsInst" 2>&1
@@ -1007,9 +1014,7 @@ EOF
         # Import/Initialize database based on TorrentPier version
         if [ "$TP_VERSION" == "v2.4" ]; then
             # v2.4: Import database from SQL dump
-            log_separator
             print_info "Importing database from SQL dump (v2.4)..."
-            log_separator
             if [ ! -f "$TORRENTPIER_PATH/install/sql/mysql.sql" ]; then
                 error_exit "SQL file not found: $TORRENTPIER_PATH/install/sql/mysql.sql"
             fi
@@ -1017,9 +1022,7 @@ EOF
             print_success "Database imported successfully"
         elif [ "$TP_VERSION" == "v2.8" ]; then
             # v2.8: Run Phinx migrations
-            log_separator
             print_info "Running Phinx migrations (v2.8)..."
-            log_separator
             cd "$TORRENTPIER_PATH" || error_exit "Failed to change directory to $TORRENTPIER_PATH"
             php vendor/bin/phinx migrate --configuration=phinx.php >> "$logsInst" 2>&1 || error_exit "Failed to run Phinx migrations"
             print_success "Database migrations completed successfully"
@@ -1031,9 +1034,7 @@ EOF
         find "$TORRENTPIER_PATH" -type d -exec chmod 755 {} \; >> "$logsInst" 2>&1
 
         # Setting the CRON task
-        log_separator
         print_info "Setting up CRON task for TorrentPier..."
-        log_separator
         if ! crontab -l 2>/dev/null | grep -q "$TORRENTPIER_PATH/cron.php"; then
             (crontab -l 2>/dev/null; echo "*/10 * * * * sudo -u www-data php $TORRENTPIER_PATH/cron.php") | crontab - >> "$logsInst" 2>&1
             print_success "CRON task configured successfully"
@@ -1041,9 +1042,7 @@ EOF
             print_info "CRON task already configured"
         fi
     else
-        log_separator
-        echo "TorrentPier is already installed on the system. The installation cannot continue." | tee -a "$logsInst"
-        log_separator
+        print_error "TorrentPier is already installed on the system. The installation cannot continue."
         read -rp "Press Enter to complete..."
         exit 1
     fi
@@ -1052,9 +1051,7 @@ EOF
     case "$WEB_SERVER" in
         nginx)
             if dpkg-query -W -f='${Status}' "nginx" 2>/dev/null | grep -q "install ok installed"; then
-                log_separator
-                echo "NGINX is not configured. The setup in progress..." | tee -a "$logsInst"
-                log_separator
+                print_info "NGINX is not configured. The setup in progress..."
                 # We remove the default one and create the TorrentPier config
                 rm /etc/nginx/sites-enabled/default >> "$logsInst" 2>&1
                 echo -e "$nginx_torrentpier" | tee /etc/nginx/sites-available/01-torrentpier.conf >> "$logsInst" 2>&1
@@ -1066,9 +1063,7 @@ EOF
 
                 # Setup SSL if enabled
                 if [ "$USE_SSL" = true ]; then
-                    log_separator
-                    echo "Obtaining SSL certificate for NGINX..." | tee -a "$logsInst"
-                    log_separator
+                    print_info "Obtaining SSL certificate for NGINX..."
                     certbot --nginx -d "$HOST" --non-interactive --agree-tos --email "$SSL_EMAIL" --redirect >> "$logsInst" 2>&1
                     
                     # Setup auto-renewal
@@ -1077,25 +1072,21 @@ EOF
                     fi
                 fi
             else
-                log_separator
-                echo "NGINX is not installed. The installation cannot continue." | tee -a "$logsInst"
-                log_separator
+                print_error "NGINX is not installed. The installation cannot continue."
                 read -rp "Press Enter to complete..."
                 exit 1
             fi
             ;;
         apache)
             if dpkg-query -W -f='${Status}' "apache2" 2>/dev/null | grep -q "install ok installed"; then
-                log_separator
-                echo "Apache is not configured. The setup in progress..." | tee -a "$logsInst"
-                log_separator
+                print_info "Apache is not configured. The setup in progress..."
                 # Enable required modules
                 a2enmod proxy_fcgi setenvif rewrite ssl >> "$logsInst" 2>&1
                 a2enconf php$PHP_VERSION-fpm >> "$logsInst" 2>&1
                 
                 # Create port 9090 configuration for Apache
                 if ! grep -q "Listen 9090" /etc/apache2/ports.conf; then
-                    echo "Listen 9090" | tee -a /etc/apache2/ports.conf >> "$logsInst" 2>&1
+                    echo "Listen 9090" >> /etc/apache2/ports.conf 2>> "$logsInst"
                 fi
                 
                 # Disable default site and create TorrentPier config
@@ -1109,9 +1100,7 @@ EOF
 
                 # Setup SSL if enabled
                 if [ "$USE_SSL" = true ]; then
-                    log_separator
-                    echo "Obtaining SSL certificate for Apache..." | tee -a "$logsInst"
-                    log_separator
+                    print_info "Obtaining SSL certificate for Apache..."
                     certbot --apache -d "$HOST" --non-interactive --agree-tos --email "$SSL_EMAIL" --redirect >> "$logsInst" 2>&1
                     
                     # Setup auto-renewal
@@ -1120,18 +1109,14 @@ EOF
                     fi
                 fi
             else
-                log_separator
-                echo "Apache is not installed. The installation cannot continue." | tee -a "$logsInst"
-                log_separator
+                print_error "Apache is not installed. The installation cannot continue."
                 read -rp "Press Enter to complete..."
                 exit 1
             fi
             ;;
         caddy)
             if dpkg-query -W -f='${Status}' "caddy" 2>/dev/null | grep -q "install ok installed"; then
-                log_separator
-                echo "Caddy is not configured. The setup in progress..." | tee -a "$logsInst"
-                log_separator
+                print_info "Caddy is not configured. The setup in progress..."
                 # Create Caddy config
                 echo -e "$caddy_config" | tee /etc/caddy/Caddyfile >> "$logsInst" 2>&1
 
@@ -1140,15 +1125,11 @@ EOF
 
                 # Inform about automatic SSL
                 if [ "$USE_SSL" = true ]; then
-                    log_separator
-                    echo "Caddy will automatically obtain SSL certificate for: $HOST" | tee -a "$logsInst"
-                    echo "This may take a few moments on first access..." | tee -a "$logsInst"
-                    log_separator
+                    print_info "Caddy will automatically obtain SSL certificate for: $HOST"
+                    print_info "This may take a few moments on first access..."
                 fi
             else
-                log_separator
-                echo "Caddy is not installed. The installation cannot continue." | tee -a "$logsInst"
-                log_separator
+                print_error "Caddy is not installed. The installation cannot continue."
                 read -rp "Press Enter to complete..."
                 exit 1
             fi
@@ -1166,7 +1147,7 @@ EOF
     perform_health_check
     
     # Print beautiful final summary
-    print_final_summary | tee -a "$saveFile"
+    print_final_summary
     
     # Save detailed credentials to file (without colors)
     {
