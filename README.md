@@ -4,10 +4,12 @@
 - Choose web server (NGINX, Apache, or Caddy);
 - Flexible configuration with command-line arguments;
 ## Supported systems:
-- **GNU/Linux:** Debian 12
-- **GNU/Linux:** Ubuntu 22.04, 24.04
+- **GNU/Linux:** Debian 12 and newer
+- **GNU/Linux:** Ubuntu 22.04, 24.04 and newer
 > [!IMPORTANT]
 > The architecture and bit depth of x86_64 are required.
+> 
+> Minimum supported versions: **Debian 12** and **Ubuntu 22.04**
 ## Starting the auto installer:
 **Update indexes and packages**
 ```bash
