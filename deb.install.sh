@@ -148,6 +148,7 @@ fi
 # Arrays and variables used
 suppOs=("debian" "ubuntu")
 currOs=$(grep ^ID= /etc/os-release | awk -F= '{print $2}')
+currOsVersion=$(grep ^VERSION_ID= /etc/os-release | awk -F= '{print $2}' | tr -d '"')
 logsInst="/var/log/torrentpier_install.log"
 saveFile="/root/torrentpier.cfg"
 
@@ -498,7 +499,40 @@ for os in "${suppOs[@]}"; do
     fi
 done
 
+# Check OS version
+check_os_version() {
+    if [[ "$currOs" == "ubuntu" ]]; then
+        # Ubuntu version check (minimum 22.04)
+        min_version="22.04"
+        if awk "BEGIN {exit !($currOsVersion >= $min_version)}"; then
+            return 0
+        else
+            print_error "Ubuntu version $currOsVersion is not supported"
+            print_error "Minimum required version: $min_version"
+            print_info "Supported versions: Ubuntu 22.04, 24.04 and newer"
+            return 1
+        fi
+    elif [[ "$currOs" == "debian" ]]; then
+        # Debian version check (minimum 12)
+        min_version="12"
+        if awk "BEGIN {exit !($currOsVersion >= $min_version)}"; then
+            return 0
+        else
+            print_error "Debian version $currOsVersion is not supported"
+            print_error "Minimum required version: $min_version"
+            print_info "Supported versions: Debian 12 and newer"
+            return 1
+        fi
+    fi
+    return 0
+}
+
 if $foundOs; then
+    # Check OS version
+    if ! check_os_version; then
+        exit 1
+    fi
+    print_success "OS check passed: $currOs $currOsVersion"
     # Print system information for diagnostics
     print_system_info
 
@@ -871,12 +905,30 @@ http://$HOST:9090 {
     print_info "Adding PHP $PHP_VERSION repository"
     apt-get install -y lsb-release ca-certificates apt-transport-https software-properties-common >> "$logsInst" 2>&1
 
-    # Add Ondřej Surý's PPA for PHP (via Launchpad, more reliable)
-    if ! grep -q "ondrej/php" /etc/apt/sources.list.d/* 2>/dev/null; then
-        LC_ALL=C.UTF-8 add-apt-repository ppa:ondrej/php -y >> "$logsInst" 2>&1
-        print_success "PHP PPA repository added"
-    else
-        print_info "PHP PPA repository already exists"
+    # Add Ondřej Surý's PHP repository (different method for Debian and Ubuntu)
+    if [[ "$currOs" == "ubuntu" ]]; then
+        # Ubuntu: Use PPA (via Launchpad)
+        if ! grep -q "ondrej/php" /etc/apt/sources.list.d/* 2>/dev/null; then
+            LC_ALL=C.UTF-8 add-apt-repository ppa:ondrej/php -y >> "$logsInst" 2>&1
+            print_success "PHP PPA repository added for Ubuntu"
+        else
+            print_info "PHP PPA repository already exists"
+        fi
+    elif [[ "$currOs" == "debian" ]]; then
+        # Debian: Use direct repository (PPA doesn't work on Debian)
+        if ! grep -q "packages.sury.org" /etc/apt/sources.list.d/* 2>/dev/null; then
+            print_info "Adding Ondřej Surý's PHP repository for Debian..."
+            
+            # Add GPG key
+            curl -sSL https://packages.sury.org/php/apt.gpg -o /etc/apt/trusted.gpg.d/php.gpg >> "$logsInst" 2>&1 || error_exit "Failed to download PHP repository GPG key"
+            
+            # Add repository
+            echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" | tee /etc/apt/sources.list.d/php.list >> "$logsInst" 2>&1
+            
+            print_success "PHP repository added for Debian"
+        else
+            print_info "PHP repository already exists"
+        fi
     fi
 
     apt-get -y update >> "$logsInst" 2>&1
